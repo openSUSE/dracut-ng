@@ -2,16 +2,53 @@ name: Lint
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
+  lint-shell:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shfmt
+        uses: luizm/action-sh-checker@v0.8.0
+        env:
+          SHFMT_OPTS: -s # arguments to shfmt.
+        with:
+          sh_checker_shellcheck_disable: true # disable shellcheck in favor of differential-shellcheck
+
+  differential-shellcheck:
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: ShellCheck
+        name: Differential ShellCheck
+        uses: redhat-plumbers-in-action/differential-shellcheck@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: ${{ always() }}
+        name: Upload artifact with ShellCheck defects in SARIF format
+        uses: actions/upload-artifact@v4
+        with:
+          name: Differential ShellCheck SARIF
+          path: ${{ steps.ShellCheck.outputs.sarif }}
+
   lint-c:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: install tools
         run: sudo apt-get install astyle
@@ -21,18 +58,3 @@ jobs:
 
       - name: check formatting
         run: git diff --exit-code
-
-  lint-shell:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: shfmt
-        uses: luizm/action-sh-checker@v0.2.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHFMT_OPTS: -s # arguments to shfmt.
-        with:
-          sh_checker_shellcheck_disable: false
-          sh_checker_comment: true

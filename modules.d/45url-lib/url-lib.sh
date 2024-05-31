@@ -16,7 +16,7 @@ type mkuniqdir > /dev/null 2>&1 || . /lib/dracut-lib.sh
 #   0: success
 #   253: unknown error (file missing)
 #   254: unhandled URL scheme / protocol
-#   255: bad arguments / unparseable URLs
+#   255: bad arguments / unparsable URLs
 #   other: fetch command failure (whatever curl/mount/etc return)
 fetch_url() {
     local url="$1" outloc="$2"
@@ -137,6 +137,7 @@ nfs_already_mounted() {
     local server="$1" path="$2" s="" p=""
     while read -r src mnt rest || [ -n "$src" ]; do
         splitsep ":" "$src" s p
+        p=${p%/}
         if [ "$server" = "$s" ]; then
             if [ "$path" = "$p" ]; then
                 echo "$mnt"
@@ -153,7 +154,7 @@ nfs_fetch_url() {
     local filepath="${path%/*}" filename="${path##*/}" mntdir=""
 
     # skip mount if server:/filepath is already mounted
-    mntdir=$(nfs_already_mounted "$server" "$path")
+    mntdir=$(nfs_already_mounted "$server" "$filepath")
     if [ -z "$mntdir" ]; then
         local mntdir
         mntdir="$(mkuniqdir /run nfs_mnt)"

@@ -33,7 +33,7 @@ install() {
 
     inst_multiple -o \
         "$sysusers"/system-user-tss.conf \
-        "$tmpfilesdir"/tpm2-tss-fapi*.conf \
+        "$tmpfilesdir"/tpm2-tss-fapi.conf \
         "$udevrulesdir"/90-tpm.rules \
         "$systemdutildir"/system-generators/systemd-tpm2-generator \
         "$systemdsystemunitdir/tpm2.target" \

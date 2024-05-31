@@ -4,9 +4,9 @@ Please make sure to follow our [Contribution Guidelines](../CONTRIBUTING.md).
 
 ## git
 
-Currently dracut lives on github.com.
+Currently dracut-ng lives on github.com.
 
-* https://github.com/dracutdevs/dracut.git
+* https://github.com/dracut-ng/dracut-ng.git
 
 Pull requests should be filed preferably on github nowadays.
 
@@ -165,7 +165,7 @@ dracut_install_dir/modules.d/
        functionality the module implements is being used on the host system.
        For example, if this module handles installing support for LUKS
        encrypted volumes, it should return 0 if all the tools to handle
-       encrpted volumes are available and the host system has the root
+       encrypted volumes are available and the host system has the root
        partition on an encrypted volume, 1 otherwise.
 
 `depends()`:
@@ -240,12 +240,12 @@ $ podman run --rm -it \
 # ./configure
 # make -j $(getconf _NPROCESSORS_ONLN)
 # cd test
-# make V=1 SKIP="16 60 61" clean check
+# make KVERSION="$(cd /lib/modules && ls -1 | tail -1)" V=1 SKIP="16 60 61" clean check
 ```
 
 with `[CONTAINER]` being one of the
-[github `dracutdevs` containers](https://github.com/orgs/dracutdevs/packages),
-e.g. `ghcr.io/dracutdevs/fedora:latest`.
+[github `dracut-ng` containers](https://github.com/orgs/dracut-ng/packages),
+e.g. `ghcr.io/dracut-ng/fedora:latest`.
 
 ### On bare metal
 
@@ -253,27 +253,27 @@ For the testsuite to pass, you will have to install at least the software packag
 mentioned in the `test/container` Dockerfiles.
 
 ```
-$ sudo make clean check
+$ make clean check
 ```
 
 in verbose mode:
 ```
-$ sudo make V=1 clean check
+$ make V=1 clean check
 ```
 
 only specific test:
 ```
-$ sudo make TESTS="01 20 40" clean check
+$ make TESTS="01 20 40" clean check
 ```
 only runs the 01, 20 and 40 tests.
 
 debug a specific test case:
 ```
 $ cd TEST-01-BASIC
-$ sudo make clean setup run
+$ make clean setup run
 ```
 ... change some kernel parameters in `test.sh` ...
 ```
-$ sudo make run
+$ make run
 ```
 to run the test without doing the setup.

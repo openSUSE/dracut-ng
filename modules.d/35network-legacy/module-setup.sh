@@ -12,7 +12,7 @@ check() {
 
 # called by dracut
 depends() {
-    echo bash
+    echo net-lib kernel-network-modules
     return 0
 }
 

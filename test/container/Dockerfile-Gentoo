@@ -1,46 +1,59 @@
 FROM docker.io/gentoo/portage:latest as portage
 
-# kernel and its dependencies in a separate builder
-FROM docker.io/gentoo/stage3:musl as kernel
+FROM docker.io/gentoo/stage3:systemd
 COPY --from=portage /var/db/repos/gentoo /var/db/repos/gentoo
-RUN emerge -qv sys-kernel/gentoo-kernel-bin
 
-FROM docker.io/gentoo/stage3:musl
-COPY --from=portage /var/db/repos/gentoo /var/db/repos/gentoo
-COPY --from=kernel /boot /boot
-COPY --from=kernel /lib/modules /lib/modules
+# Speed-up using binpkgs
+RUN echo "MAKEOPTS=\"-j$(nproc) -l$(nproc)\"" >> /etc/portage/make.conf
+RUN echo "EMERGE_DEFAULT_OPTS=\"-j$(nproc) -l$(nproc)\"" >> /etc/portage/make.conf
+RUN echo "FEATURES=\"getbinpkg binpkg-ignore-signature parallel-fetch parallel-install pkgdir-index-trusted\"" >> /etc/portage/make.conf
 
-MAINTAINER https://github.com/dracutdevs/dracut
+# systemd-boot, no need to install intramfs with kernel
+RUN echo "USE=\"boot kernel-install -initramfs\"" >> /etc/portage/make.conf
 
-ENV container docker
-LABEL RUN="docker run -it --name NAME --privileged --ipc=host --net=host --pid=host -e NAME=NAME -e IMAGE=IMAGE IMAGE"
+# Use debian's installkernel
+RUN echo 'sys-kernel/installkernel -systemd' >> /etc/portage/package.use/kernel
 
-RUN echo 'export DRACUT_NO_XATTR=1 KVERSION=$(cd /lib/modules; ls -1 | tail -1)' > /etc/profile.d/dracut-test.sh
+# Enable ukify and cryptsetup tools (includes unit generator for crypttab)
+RUN echo 'sys-apps/systemd ukify cryptsetup' >> /etc/portage/package.use/systemd
 
-# Only install `dmsetup`: attempting to install all of lvm2 fails due to missing kernel headers.
-RUN echo 'sys-fs/lvm2 device-mapper-only -thin' > /etc/portage/package.use/lvm2
+# Support thin volumes and build all of LVM2 including daemons and tools like lvchange
+RUN echo 'sys-fs/lvm2 thin lvm' >> /etc/portage/package.use/lvm2
 
-# workaround for https://bugs.gentoo.org/734022 whereby Gentoo does not support NFS4 with musl
-RUN echo 'net-fs/nfs-utils -nfsv4' > /etc/portage/package.use/nfs-utils
-
-# Install needed packages for the dracut CI container
-RUN emerge -qv \
+RUN emerge --quiet --deep --autounmask-continue=y --with-bdeps=n \
+    app-admin/rsyslog \
     app-arch/cpio \
+    app-crypt/tpm2-tools \
+    app-crypt/sbsigntools \
     app-emulation/qemu \
+    app-misc/jq \
+    app-portage/gentoolkit \
     app-shells/dash \
+    dev-lang/rust-bin \
+    net-fs/cifs-utils \
     net-fs/nfs-utils \
     net-misc/dhcp \
+    net-wireless/bluez \
+    sys-apps/biosdevname \
     sys-apps/busybox \
+    sys-apps/nvme-cli \
+    sys-apps/rng-tools \
+    sys-apps/systemd \
     sys-block/nbd \
+    sys-block/open-iscsi \
     sys-block/parted \
-    sys-block/thin-provisioning-tools \
+    sys-block/tgt \
     sys-fs/btrfs-progs \
+    sys-fs/cryptsetup \
     sys-fs/dmraid \
-    sys-fs/lvm2 \
     sys-fs/mdadm \
+    sys-fs/multipath-tools \
     sys-fs/ntfs3g \
     sys-fs/squashfs-tools \
+    sys-kernel/gentoo-kernel-bin \
+    sys-libs/libxcrypt \
+    sys-libs/glibc \
+    virtual/pkgconfig \
     && rm -rf /var/cache/* /usr/share/doc/* /usr/share/man/*
 
-# Set default command
-CMD ["/usr/bin/bash"]
+RUN emerge --depclean --with-bdeps=n

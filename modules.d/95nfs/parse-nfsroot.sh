@@ -103,7 +103,7 @@ nfsroot_to_var "$netroot"
 # Set fstype, might help somewhere
 fstype=${nfs#/dev/}
 
-# Rewrite root so we don't have to parse this uglyness later on again
+# Rewrite root so we don't have to parse this ugliness later on again
 netroot="$fstype:$server:$path:$options"
 
 # If we don't have a server, we need dhcp
@@ -116,13 +116,15 @@ fi
 # shellcheck disable=SC2034
 rootok=1
 
-# Shut up init error check or make sure that block parser wont get
+# Shut up init error check or make sure that block parser won't get
 # confused by having /dev/nfs[4]
 root="$fstype"
 
 # shellcheck disable=SC2016
 echo '[ -e $NEWROOT/proc ]' > "$hookdir"/initqueue/finished/nfsroot.sh
 
+# rpc user needs to be able to write to this directory to save the warmstart
+# file
 mkdir -p /var/lib/rpcbind
 chown rpc:rpc /var/lib/rpcbind
 chmod 770 /var/lib/rpcbind

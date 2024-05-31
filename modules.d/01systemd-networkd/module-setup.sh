@@ -7,7 +7,7 @@ check() {
     [[ $mount_needs ]] && return 1
 
     # If the binary(s) requirements are not fulfilled the module can't be installed
-    require_binaries ip networkctl \
+    require_binaries ip \
         "$systemdutildir"/systemd-networkd \
         "$systemdutildir"/systemd-network-generator \
         "$systemdutildir"/systemd-networkd-wait-online \
@@ -22,7 +22,7 @@ check() {
 depends() {
 
     # This module has external dependency on other module(s).
-    echo dbus kernel-network-modules systemd-sysusers
+    echo kernel-network-modules systemd-sysusers
     # Return 0 to include the dependent module(s) in the initramfs.
     return 0
 
@@ -47,6 +47,7 @@ install() {
         "$systemdnetwork"/80-container-vz.network \
         "$systemdnetwork"/80-vm-vt.network \
         "$systemdnetwork"/80-wifi-adhoc.network \
+        "$systemdnetwork"/98-default-mac-none.link \
         "$systemdnetwork"/99-default.link \
         "$systemdsystemunitdir"/systemd-networkd.service \
         "$systemdsystemunitdir"/systemd-networkd.socket \
@@ -55,7 +56,7 @@ install() {
         "$systemdsystemunitdir"/systemd-networkd-wait-online@.service \
         "$systemdsystemunitdir"/systemd-network-generator.service \
         "$sysusers"/systemd-network.conf \
-        networkctl ip
+        ip
 
     # Enable systemd type units
     for i in \

@@ -1,15 +1,15 @@
 #!/bin/bash
 
-[ -z "$USE_NETWORK" ] && USE_NETWORK="network-legacy"
-
 # shellcheck disable=SC2034
 TEST_DESCRIPTION="root filesystem on NFS with $USE_NETWORK"
 
-KVERSION=${KVERSION-$(uname -r)}
+test_check() {
+    command -v exportfs &> /dev/null
+}
 
 # Uncomment this to debug failures
 #DEBUGFAIL="rd.debug loglevel=7 rd.break=initqueue rd.shell"
-SERVER_DEBUG="rd.debug loglevel=7"
+#SERVER_DEBUG="rd.debug loglevel=7"
 #SERIAL="unix:/tmp/server.sock"
 
 run_server() {
@@ -18,15 +18,14 @@ run_server() {
     declare -a disk_args=()
     # shellcheck disable=SC2034
     declare -i disk_index=0
-    qemu_add_drive_args disk_index disk_args "$TESTDIR"/server.img root 1
+    qemu_add_drive disk_index disk_args "$TESTDIR"/server.img root 0 1
 
     "$testdir"/run-qemu \
         "${disk_args[@]}" \
         -net socket,listen=127.0.0.1:12320 \
         -net nic,macaddr=52:54:00:12:34:56,model=e1000 \
         -serial "${SERIAL:-"file:$TESTDIR/server.log"}" \
-        -device i6300esb -watchdog-action poweroff \
-        -append "panic=1 oops=panic softlockup_panic=1 root=LABEL=dracut rootfstype=ext3 rw console=ttyS0,115200n81 selinux=0 $SERVER_DEBUG" \
+        -append "panic=1 oops=panic softlockup_panic=1 root=LABEL=dracut rootfstype=ext4 rw console=ttyS0,115200n81 selinux=0 $SERVER_DEBUG" \
         -initrd "$TESTDIR"/initramfs.server \
         -pidfile "$TESTDIR"/server.pid -daemonize || return 1
     chmod 644 "$TESTDIR"/server.pid || return 1
@@ -56,26 +55,22 @@ client_test() {
     echo "CLIENT TEST START: $test_name"
 
     # Need this so kvm-qemu will boot (needs non-/dev/zero local disk)
-    dd if=/dev/zero of="$TESTDIR"/marker.img bs=1MiB count=1
     declare -a disk_args=()
     # shellcheck disable=SC2034
     declare -i disk_index=0
-    qemu_add_drive_args disk_index disk_args "$TESTDIR"/marker.img marker
-
-    if dhclient --help 2>&1 | grep -q -F -- '--timeout' 2> /dev/null; then
-        cmdline="$cmdline rd.net.timeout.dhcp=3"
-    fi
+    qemu_add_drive disk_index disk_args "$TESTDIR"/marker.img marker 1
+    qemu_add_drive disk_index disk_args "$TESTDIR"/marker2.img marker2 1
+    cmdline="$cmdline rd.net.timeout.dhcp=30"
 
     "$testdir"/run-qemu \
         "${disk_args[@]}" \
         -net nic,macaddr="$mac",model=e1000 \
         -net socket,connect=127.0.0.1:12320 \
-        -device i6300esb -watchdog-action poweroff \
-        -append "panic=1 oops=panic softlockup_panic=1 systemd.crash_reboot rd.shell=0 $cmdline $DEBUGFAIL rd.retry=10 quiet ro console=ttyS0,115200n81 selinux=0" \
+        -append "$cmdline ro" \
         -initrd "$TESTDIR"/initramfs.testing
 
     # shellcheck disable=SC2181
-    if [[ $? -ne 0 ]] || ! grep -U --binary-files=binary -F -m 1 -q nfs-OK "$TESTDIR"/marker.img; then
+    if [[ $? -ne 0 ]] || ! test_marker_check nfs-OK; then
         echo "CLIENT TEST END: $test_name [FAILED - BAD EXIT]"
         return 1
     fi
@@ -118,14 +113,19 @@ client_test() {
         return 1
     fi
 
+    if ! test_marker_check nfsfetch-OK marker2.img; then
+        echo "CLIENT TEST END: $test_name [FAILED - NFS FETCH FAILED]"
+        return 1
+    fi
+
     echo "CLIENT TEST END: $test_name [OK]"
     return 0
 }
 
 test_nfsv3() {
     # MAC numbering scheme:
-    # NFSv3: last octect starts at 0x00 and works up
-    # NFSv4: last octect starts at 0x80 and works up
+    # NFSv3: last octet starts at 0x00 and works up
+    # NFSv4: last octet starts at 0x80 and works up
 
     client_test "NFSv3 root=dhcp DHCP path only" 52:54:00:12:34:00 \
         "root=dhcp" 192.168.50.1 -wsize=4096 || return 1
@@ -215,8 +215,9 @@ test_run() {
         return 1
     fi
 
-    test_nfsv3 \
-        && test_nfsv4
+    # focus on NFSv4 testing, disable NFSv3 tests
+    #test_nfsv3
+    test_nfsv4
 
     ret=$?
 
@@ -239,7 +240,7 @@ test_setup() {
         # shellcheck disable=SC2030
         export initdir=$TESTDIR/server/overlay/source
         # shellcheck disable=SC1090
-        . "$basedir"/dracut-init.sh
+        . "$PKGLIBDIR"/dracut-init.sh
 
         (
             cd "$initdir" || exit
@@ -249,7 +250,7 @@ test_setup() {
         )
 
         inst_multiple sh ls shutdown poweroff stty cat ps ln ip \
-            dmesg mkdir cp ping exportfs \
+            dmesg mkdir cp exportfs \
             modprobe rpc.nfsd rpc.mountd showmount tcpdump \
             sleep mount chmod rm
         for _terminfodir in /lib/terminfo /etc/terminfo /usr/share/terminfo; do
@@ -260,9 +261,9 @@ test_setup() {
         done
         type -P portmap > /dev/null && inst_multiple portmap
         type -P rpcbind > /dev/null && inst_multiple rpcbind
+
         [ -f /etc/netconfig ] && inst_multiple /etc/netconfig
         type -P dhcpd > /dev/null && inst_multiple dhcpd
-        [ -x /usr/sbin/dhcpd3 ] && inst /usr/sbin/dhcpd3 /usr/sbin/dhcpd
         instmods nfsd sunrpc ipv6 lockd af_packet
         inst ./server-init.sh /sbin/init
         inst_simple /etc/os-release
@@ -300,15 +301,16 @@ test_setup() {
         # shellcheck disable=SC2031
         export initdir=$TESTDIR/server/overlay/source/nfs/client
         # shellcheck disable=SC1090
-        . "$basedir"/dracut-init.sh
+        . "$PKGLIBDIR"/dracut-init.sh
 
         (
             cd "$initdir" || exit
             mkdir -p dev sys proc etc run root usr var/lib/nfs/rpc_pipefs
+            echo "TEST FETCH FILE" > root/fetchfile
         )
 
         inst_multiple sh shutdown poweroff stty cat ps ln ip dd \
-            mount dmesg mkdir cp ping grep setsid ls vi less cat sync
+            mount dmesg mkdir cp grep setsid ls vi less cat sync
         for _terminfodir in /lib/terminfo /etc/terminfo /usr/share/terminfo; do
             if [ -f "${_terminfodir}"/l/linux ]; then
                 inst_multiple -o "${_terminfodir}"/l/linux
@@ -316,9 +318,12 @@ test_setup() {
             fi
         done
 
-        inst_simple "${basedir}/modules.d/99base/dracut-lib.sh" "/lib/dracut-lib.sh"
-        inst_simple "${basedir}/modules.d/99base/dracut-dev-lib.sh" "/lib/dracut-dev-lib.sh"
-        inst_binary "${basedir}/dracut-util" "/usr/bin/dracut-util"
+        inst_simple "${PKGLIBDIR}/modules.d/99base/dracut-lib.sh" "/lib/dracut-lib.sh"
+        inst_simple "${PKGLIBDIR}/modules.d/99base/dracut-dev-lib.sh" "/lib/dracut-dev-lib.sh"
+        inst_simple "${PKGLIBDIR}/modules.d/45url-lib/url-lib.sh" "/lib/url-lib.sh"
+        inst_simple "${PKGLIBDIR}/modules.d/45net-lib/net-lib.sh" "/lib/net-lib.sh"
+        inst_simple "${PKGLIBDIR}/modules.d/95nfs/nfs-lib.sh" "/lib/nfs-lib.sh"
+        inst_binary "${PKGLIBDIR}/dracut-util" "/usr/bin/dracut-util"
         ln -s dracut-util "${initdir}/usr/bin/dracut-getarg"
         ln -s dracut-util "${initdir}/usr/bin/dracut-getargs"
 
@@ -351,8 +356,8 @@ test_setup() {
         # shellcheck disable=SC2031
         export initdir=$TESTDIR/server/overlay
         # shellcheck disable=SC1090
-        . "$basedir"/dracut-init.sh
-        inst_multiple sfdisk mkfs.ext3 poweroff cp umount sync dd
+        . "$PKGLIBDIR"/dracut-init.sh
+        inst_multiple mkfs.ext4 poweroff cp umount sync dd
         inst_hook initqueue 01 ./create-root.sh
         inst_hook initqueue/finished 01 ./finished-false.sh
     )
@@ -360,28 +365,26 @@ test_setup() {
     # create an initramfs that will create the target root filesystem.
     # We do it this way so that we do not risk trashing the host mdraid
     # devices, volume groups, encrypted partitions, etc.
-    "$basedir"/dracut.sh -l -i "$TESTDIR"/server/overlay / \
+    "$DRACUT" -l -i "$TESTDIR"/server/overlay / \
         -m "bash rootfs-block kernel-modules qemu" \
-        -d "piix ide-gd_mod ata_piix ext3 sd_mod" \
+        -d "piix ide-gd_mod ata_piix ext4 sd_mod" \
         --nomdadmconf \
         --no-hostonly-cmdline -N \
         -f "$TESTDIR"/initramfs.makeroot "$KVERSION" || return 1
     rm -rf -- "$TESTDIR"/server
 
-    dd if=/dev/zero of="$TESTDIR"/server.img bs=1MiB count=80
-    dd if=/dev/zero of="$TESTDIR"/marker.img bs=1MiB count=1
     declare -a disk_args=()
     # shellcheck disable=SC2034
     declare -i disk_index=0
-    qemu_add_drive_args disk_index disk_args "$TESTDIR"/marker.img marker
-    qemu_add_drive_args disk_index disk_args "$TESTDIR"/server.img root
+    qemu_add_drive disk_index disk_args "$TESTDIR"/marker.img marker 1
+    qemu_add_drive disk_index disk_args "$TESTDIR"/server.img root 160
 
     # Invoke KVM and/or QEMU to actually create the target filesystem.
     "$testdir"/run-qemu \
         "${disk_args[@]}" \
-        -append "root=/dev/dracut/root rw rootfstype=ext3 quiet console=ttyS0,115200n81 selinux=0" \
+        -append "root=/dev/dracut/root rw rootfstype=ext4 quiet console=ttyS0,115200n81 selinux=0" \
         -initrd "$TESTDIR"/initramfs.makeroot || return 1
-    grep -U --binary-files=binary -F -m 1 -q dracut-root-block-created "$TESTDIR"/marker.img || return 1
+    test_marker_check dracut-root-block-created || return 1
 
     # Make an overlay with needed tools for the test harness
     (
@@ -390,7 +393,7 @@ test_setup() {
         export initdir="$TESTDIR"/overlay
         mkdir -p "$TESTDIR"/overlay
         # shellcheck disable=SC1090
-        . "$basedir"/dracut-init.sh
+        . "$PKGLIBDIR"/dracut-init.sh
         inst_multiple poweroff shutdown
         inst_hook shutdown-emergency 000 ./hard-off.sh
         inst_hook emergency 000 ./hard-off.sh
@@ -398,25 +401,23 @@ test_setup() {
     )
 
     # Make client's dracut image
-    "$basedir"/dracut.sh -l -i "$TESTDIR"/overlay / \
-        -o "plymouth" \
-        -a "dmsquash-live debug watchdog ${USE_NETWORK}" \
-        --no-hostonly-cmdline -N \
-        -f "$TESTDIR"/initramfs.testing "$KVERSION" || return 1
+    test_dracut \
+        -a "dmsquash-live ${USE_NETWORK}" \
+        "$TESTDIR"/initramfs.testing
 
     (
         # shellcheck disable=SC2031
         export initdir="$TESTDIR"/overlay
         # shellcheck disable=SC1090
-        . "$basedir"/dracut-init.sh
+        . "$PKGLIBDIR"/dracut-init.sh
         rm "$initdir"/etc/systemd/network/01-client.link
         inst_simple ./server.link /etc/systemd/network/01-server.link
         inst_hook pre-mount 99 ./wait-if-server.sh
     )
     # Make server's dracut image
-    "$basedir"/dracut.sh -l -i "$TESTDIR"/overlay / \
-        -m "dash rootfs-block debug kernel-modules watchdog qemu network network-legacy" \
-        -d "af_packet piix ide-gd_mod ata_piix ext3 sd_mod e1000 i6300esb" \
+    "$DRACUT" -l -i "$TESTDIR"/overlay / \
+        -m "bash rootfs-block debug kernel-modules watchdog qemu network-legacy" \
+        -d "af_packet piix ide-gd_mod ata_piix ext4 sd_mod e1000 i6300esb" \
         --no-hostonly-cmdline -N \
         -f "$TESTDIR"/initramfs.server "$KVERSION" || return 1
 

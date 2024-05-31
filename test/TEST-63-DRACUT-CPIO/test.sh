@@ -7,7 +7,7 @@ TEST_DESCRIPTION="kernel cpio extraction tests for dracut-cpio"
 # see dracut-cpio source for unit tests
 
 test_check() {
-    if ! [[ -x $basedir/dracut-cpio ]]; then
+    if ! [[ -x "$PKGLIBDIR/dracut-cpio" ]]; then
         echo "Test needs dracut-cpio... Skipping"
         return 1
     fi
@@ -21,28 +21,23 @@ test_dracut_cpio() {
 
     mkdir -p "$tdir"
 
-    # VM script to print sentinel on boot
-    # write to kmsg so that sysrq messages don't race with console output
     cat > "$tdir/init.sh" << EOF
-echo "Image with ${dracut_cpio_params[*]} booted successfully" > /dev/kmsg
-echo 1 > /proc/sys/kernel/sysrq
-echo o > /proc/sysrq-trigger
-sleep 20
+echo "Image with ${dracut_cpio_params[*]} booted successfully"
+poweroff -f
 EOF
 
-    "$basedir"/dracut.sh -l --drivers "" \
+    test_dracut \
+        --no-kernel --drivers "" \
+        --modules "test" \
         "${dracut_cpio_params[@]}" \
-        --modules "bash base" \
         --include "$tdir/init.sh" /lib/dracut/hooks/emergency/00-init.sh \
-        --no-hostonly --no-hostonly-cmdline \
-        "$tdir/initramfs" \
-        || return 1
+        --install "poweroff" \
+        "$tdir/initramfs"
 
     "$testdir"/run-qemu \
-        -device i6300esb -watchdog-action poweroff \
         -daemonize -pidfile "$tdir/vm.pid" \
         -serial "file:$tdir/console.out" \
-        -append "panic=1 oops=panic softlockup_panic=1 loglevel=7 console=ttyS0 rd.shell=1" \
+        -append "panic=1 oops=panic softlockup_panic=1 console=ttyS0 rd.shell=1" \
         -initrd "$tdir/initramfs" || return 1
 
     timeout=120

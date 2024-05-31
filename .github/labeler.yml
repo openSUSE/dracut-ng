@@ -78,6 +78,10 @@ systemd-ask-password:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/01systemd-ask-password/*'
 
+systemd-bsod:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/01systemd-bsod/*'
+
 systemd-coredump:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/01systemd-coredump/*'
@@ -113,6 +117,10 @@ systemd-modules-load:
 systemd-networkd:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/01systemd-networkd/*'
+
+systemd-network-management:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/00systemd-network-management/*'
 
 systemd-pcrphase:
   - changed-files:
@@ -322,6 +330,10 @@ multipath:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/90multipath/*'
 
+numlock:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/90numlock/*'
+
 nvdimm:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/90nvdimm/*'
@@ -341,6 +353,10 @@ qemu:
 qemu-net:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/90qemu-net/*'
+
+systemd-cryptsetup:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/90systemd-cryptsetup/*'
 
 crypt-gpg:
   - changed-files:
@@ -382,10 +398,6 @@ dasd_mod:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/95dasd_mod/*'
 
-dasd_rules:
-  - changed-files:
-    - any-glob-to-any-file: 'modules.d/95dasd_rules/*'
-
 dcssblk:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/95dcssblk/*'
@@ -426,10 +438,6 @@ nvmf:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/95nvmf/*'
 
-qeth_rules:
-  - changed-files:
-    - any-glob-to-any-file: 'modules.d/95qeth_rules/*'
-
 resume:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/95resume/*'
@@ -461,10 +469,6 @@ virtiofs:
 zfcp:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/95zfcp/*'
-
-zfcp_rules:
-  - changed-files:
-    - any-glob-to-any-file: 'modules.d/95zfcp_rules/*'
 
 znet:
   - changed-files:
@@ -537,6 +541,14 @@ squash:
 uefi-lib:
   - changed-files:
     - any-glob-to-any-file: 'modules.d/99uefi-lib/*'
+
+net-lib:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/45net-lib/*'
+
+pcmcia:
+  - changed-files:
+    - any-glob-to-any-file: 'modules.d/90pcmcia/*'
 
 test:
   - changed-files:

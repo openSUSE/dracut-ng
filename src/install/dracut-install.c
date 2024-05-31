@@ -83,6 +83,8 @@ FILE *logfile_f = NULL;
 static Hashmap *items = NULL;
 static Hashmap *items_failed = NULL;
 static Hashmap *modules_loaded = NULL;
+static Hashmap *modules_suppliers = NULL;
+static Hashmap *processed_suppliers = NULL;
 static regex_t mod_filter_path;
 static regex_t mod_filter_nopath;
 static regex_t mod_filter_symbol;
@@ -95,6 +97,13 @@ static bool arg_mod_filter_nosymbol = false;
 static bool arg_mod_filter_noname = false;
 
 static int dracut_install(const char *src, const char *dst, bool isdir, bool resolvedeps, bool hashdst);
+static int install_dependent_modules(struct kmod_ctx *ctx, struct kmod_list *modlist, Hashmap *suppliers_paths);
+
+static void item_free(char *i)
+{
+        assert(i);
+        free(i);
+}
 
 static inline void kmod_module_unrefp(struct kmod_module **p)
 {
@@ -144,6 +153,18 @@ static inline void fts_closep(FTS **p)
 #define _cleanup_fts_close_ _cleanup_(fts_closep)
 
 #define _cleanup_globfree_ _cleanup_(globfree)
+
+static inline void destroy_hashmap(Hashmap **hashmap)
+{
+        void *i = NULL;
+
+        while ((i = hashmap_steal_first(*hashmap)))
+                item_free(i);
+
+        hashmap_free(*hashmap);
+}
+
+#define _cleanup_destroy_hashmap_ _cleanup_(destroy_hashmap)
 
 static size_t dir_len(char const *file)
 {
@@ -588,7 +609,7 @@ static int resolve_deps(const char *src)
                         break;
 
                 if (strstr(buf, "cannot be preloaded"))
-                        break;
+                        continue;
 
                 if (strstr(buf, destrootdir))
                         break;
@@ -942,12 +963,6 @@ static int dracut_install(const char *orig_src, const char *orig_dst, bool isdir
         log_debug("dracut_install ret = %d", ret);
 
         return ret;
-}
-
-static void item_free(char *i)
-{
-        assert(i);
-        free(i);
 }
 
 static void usage(int status)
@@ -1528,67 +1543,209 @@ static int check_module_supported(struct kmod_module *mod) {
         return ret;
 }
 
-static int install_dependent_modules(struct kmod_list *modlist)
+static int find_kmod_module_from_sysfs_node(struct kmod_ctx *ctx, const char *sysfs_node, int sysfs_node_len,
+                                            struct kmod_list **modules)
 {
-        struct kmod_list *itr = NULL;
+        char modalias_path[PATH_MAX];
+        if (snprintf(modalias_path, sizeof(modalias_path), "%.*s/modalias", sysfs_node_len,
+                     sysfs_node) >= sizeof(modalias_path))
+                return -1;
+
+        _cleanup_close_ int modalias_file = -1;
+        if ((modalias_file = open(modalias_path, O_RDONLY | O_CLOEXEC)) == -1)
+                return 0;
+
+        char alias[page_size()];
+        ssize_t len = read(modalias_file, alias, sizeof(alias));
+        alias[len - 1] = '\0';
+
+        return kmod_module_new_from_lookup(ctx, alias, modules);
+}
+
+static int find_modules_from_sysfs_node(struct kmod_ctx *ctx, const char *sysfs_node, Hashmap *modules)
+{
+        _cleanup_kmod_module_unref_list_ struct kmod_list *list = NULL;
+        struct kmod_list *l = NULL;
+
+        if (find_kmod_module_from_sysfs_node(ctx, sysfs_node, strlen(sysfs_node), &list) >= 0) {
+                kmod_list_foreach(l, list) {
+                        struct kmod_module *mod = kmod_module_get_module(l);
+                        char *module = strdup(kmod_module_get_name(mod));
+                        kmod_module_unref(mod);
+
+                        if (hashmap_put(modules, module, module) < 0)
+                                free(module);
+                }
+        }
+
+        return 0;
+}
+
+static void find_suppliers_for_sys_node(struct kmod_ctx *ctx, Hashmap *suppliers, const char *node_path_raw,
+                                        size_t node_path_len)
+{
+        char node_path[PATH_MAX];
+        char real_path[PATH_MAX];
+
+        memcpy(node_path, node_path_raw, node_path_len);
+        node_path[node_path_len] = '\0';
+
+        DIR *d;
+        struct dirent *dir;
+        while (realpath(node_path, real_path) != NULL && strcmp(real_path, "/sys/devices")) {
+                d = opendir(node_path);
+                if (d) {
+                        size_t real_path_len = strlen(real_path);
+                        while ((dir = readdir(d)) != NULL) {
+                                if (strstr(dir->d_name, "supplier:platform") != NULL) {
+                                        if (snprintf(real_path + real_path_len, sizeof(real_path) - real_path_len, "/%s/supplier",
+                                                     dir->d_name) < sizeof(real_path) - real_path_len) {
+                                                char *real_supplier_path = realpath(real_path, NULL);
+                                                if (real_supplier_path != NULL)
+                                                        if (hashmap_put(suppliers, real_supplier_path, real_supplier_path) < 0)
+                                                                free(real_supplier_path);
+                                        }
+                                }
+                        }
+                        closedir(d);
+                }
+                strncat(node_path, "/..", 3); // Also find suppliers of parents
+        }
+}
+
+static void find_suppliers(struct kmod_ctx *ctx)
+{
+        _cleanup_fts_close_ FTS *fts;
+        char *paths[] = { "/sys/devices/platform", NULL };
+        fts = fts_open(paths, FTS_NOSTAT | FTS_PHYSICAL, NULL);
+
+        for (FTSENT *ftsent = fts_read(fts); ftsent != NULL; ftsent = fts_read(fts)) {
+                if (strcmp(ftsent->fts_name, "modalias") == 0) {
+                        _cleanup_kmod_module_unref_list_ struct kmod_list *list = NULL;
+                        struct kmod_list *l;
+
+                        if (find_kmod_module_from_sysfs_node(ctx, ftsent->fts_parent->fts_path, ftsent->fts_parent->fts_pathlen, &list) < 0)
+                                continue;
+
+                        kmod_list_foreach(l, list) {
+                                _cleanup_kmod_module_unref_ struct kmod_module *mod = kmod_module_get_module(l);
+                                const char *name = kmod_module_get_name(mod);
+                                Hashmap *suppliers = hashmap_get(modules_suppliers, name);
+                                if (suppliers == NULL) {
+                                        suppliers = hashmap_new(string_hash_func, string_compare_func);
+                                        hashmap_put(modules_suppliers, strdup(name), suppliers);
+                                }
+
+                                find_suppliers_for_sys_node(ctx, suppliers, ftsent->fts_parent->fts_path, ftsent->fts_parent->fts_pathlen);
+                        }
+                }
+        }
+}
+
+static Hashmap *find_suppliers_paths_for_module(const char *module)
+{
+        return hashmap_get(modules_suppliers, module);
+}
+
+static int install_dependent_module(struct kmod_ctx *ctx, struct kmod_module *mod, Hashmap *suppliers_paths, int *err)
+{
         const char *path = NULL;
         const char *name = NULL;
+
+        path = kmod_module_get_path(mod);
+
+        if (path == NULL)
+                return 0;
+
+        if (check_hashmap(items_failed, path))
+                return -1;
+
+        if (check_hashmap(items, &path[kerneldirlen])) {
+                return 0;
+        }
+
+        name = kmod_module_get_name(mod);
+
+        if (arg_mod_filter_noname && (regexec(&mod_filter_noname, name, 0, NULL, 0) == 0)) {
+                return 0;
+        }
+
+        *err = dracut_install(path, &path[kerneldirlen], false, false, true);
+        if (*err == 0) {
+                _cleanup_kmod_module_unref_list_ struct kmod_list *modlist = NULL;
+                _cleanup_kmod_module_unref_list_ struct kmod_list *modpre = NULL;
+                _cleanup_kmod_module_unref_list_ struct kmod_list *modpost = NULL;
+                log_debug("dracut_install '%s' '%s' OK", path, &path[kerneldirlen]);
+                install_firmware(mod);
+                modlist = kmod_module_get_dependencies(mod);
+                *err = install_dependent_modules(ctx, modlist, suppliers_paths);
+                if (*err == 0) {
+                        *err = kmod_module_get_softdeps(mod, &modpre, &modpost);
+                        if (*err == 0) {
+                                int r;
+                                *err = install_dependent_modules(ctx, modpre, NULL);
+                                r = install_dependent_modules(ctx, modpost, NULL);
+                                *err = *err ? : r;
+                        }
+                }
+        } else {
+                log_error("dracut_install '%s' '%s' ERROR", path, &path[kerneldirlen]);
+        }
+
+        return 0;
+}
+
+static int install_dependent_modules(struct kmod_ctx *ctx, struct kmod_list *modlist, Hashmap *suppliers_paths)
+{
+        struct kmod_list *itr = NULL;
         int ret = 0;
 
         kmod_list_foreach(itr, modlist) {
                 _cleanup_kmod_module_unref_ struct kmod_module *mod = NULL;
                 mod = kmod_module_get_module(itr);
-                path = kmod_module_get_path(mod);
-
-                if (path == NULL)
-                        continue;
-
-                if (check_hashmap(items_failed, path))
-                        return -1;
-
-                if (check_hashmap(items, &path[kerneldirlen])) {
-                        continue;
-                }
-
-                name = kmod_module_get_name(mod);
-
-                if (arg_mod_filter_noname && (regexec(&mod_filter_noname, name, 0, NULL, 0) == 0)) {
-                        continue;
-                }
-
                 if (arg_supported) {
                         ret = check_module_supported(mod);
                         if (ret < 0)
                                 return ret;
                 }
+                if (install_dependent_module(ctx, mod, find_suppliers_paths_for_module(kmod_module_get_name(mod)), &ret))
+                        return -1;
+        }
 
-                ret = dracut_install(path, &path[kerneldirlen], false, false, true);
-                if (ret == 0) {
-                        _cleanup_kmod_module_unref_list_ struct kmod_list *modlist = NULL;
-                        _cleanup_kmod_module_unref_list_ struct kmod_list *modpre = NULL;
-                        _cleanup_kmod_module_unref_list_ struct kmod_list *modpost = NULL;
-                        log_debug("dracut_install '%s' '%s' OK", path, &path[kerneldirlen]);
-                        install_firmware(mod);
-                        modlist = kmod_module_get_dependencies(mod);
-                        ret = install_dependent_modules(modlist);
-                        if (ret == 0) {
-                                ret = kmod_module_get_softdeps(mod, &modpre, &modpost);
-                                if (ret == 0) {
-                                        int r;
-                                        ret = install_dependent_modules(modpre);
-                                        r = install_dependent_modules(modpost);
-                                        ret = ret ? : r;
+        const char *supplier_path;
+        Iterator i;
+        HASHMAP_FOREACH(supplier_path, suppliers_paths, i) {
+                if (check_hashmap(processed_suppliers, supplier_path))
+                        continue;
+
+                char *path = strdup(supplier_path);
+                hashmap_put(processed_suppliers, path, path);
+
+                _cleanup_destroy_hashmap_ Hashmap *modules = hashmap_new(string_hash_func, string_compare_func);
+                find_modules_from_sysfs_node(ctx, supplier_path, modules);
+
+                _cleanup_destroy_hashmap_ Hashmap *suppliers = hashmap_new(string_hash_func, string_compare_func);
+                find_suppliers_for_sys_node(ctx, suppliers, supplier_path, strlen(supplier_path));
+
+                if (!hashmap_isempty(modules)) { // Supplier is a module
+                        const char *module;
+                        Iterator j;
+                        HASHMAP_FOREACH(module, modules, j) {
+                                _cleanup_kmod_module_unref_ struct kmod_module *mod = NULL;
+                                if (!kmod_module_new_from_name(ctx, module, &mod)) {
+                                        if (install_dependent_module(ctx, mod, suppliers, &ret))
+                                                return -1;
                                 }
                         }
-                } else {
-                        log_error("dracut_install '%s' '%s' ERROR", path, &path[kerneldirlen]);
+                } else { // Supplier is builtin
+                        install_dependent_modules(ctx, NULL, suppliers);
                 }
         }
 
         return ret;
 }
 
-static int install_module(struct kmod_module *mod)
+static int install_module(struct kmod_ctx *ctx, struct kmod_module *mod)
 {
         int ret = 0;
         _cleanup_kmod_module_unref_list_ struct kmod_list *modlist = NULL;
@@ -1644,15 +1801,16 @@ static int install_module(struct kmod_module *mod)
         }
         install_firmware(mod);
 
+        Hashmap *suppliers = find_suppliers_paths_for_module(name);
         modlist = kmod_module_get_dependencies(mod);
-        ret = install_dependent_modules(modlist);
+        ret = install_dependent_modules(ctx, modlist, suppliers);
 
         if (ret == 0) {
                 ret = kmod_module_get_softdeps(mod, &modpre, &modpost);
                 if (ret == 0) {
                         int r;
-                        ret = install_dependent_modules(modpre);
-                        r = install_dependent_modules(modpost);
+                        ret = install_dependent_modules(ctx, modpre, NULL);
+                        r = install_dependent_modules(ctx, modpost, NULL);
                         ret = ret ? : r;
                 }
         }
@@ -1768,6 +1926,9 @@ static int install_modules(int argc, char **argv)
         if (p != NULL)
                 kerneldirlen = p - abskpath;
 
+        modules_suppliers = hashmap_new(string_hash_func, string_compare_func);
+        find_suppliers(ctx);
+
         if (arg_hostonly) {
                 char *modalias_file;
                 modalias_file = getenv("DRACUT_KERNEL_MODALIASES");
@@ -1856,7 +2017,7 @@ static int install_modules(int argc, char **argv)
                         }
                         kmod_list_foreach(itr, modlist) {
                                 mod = kmod_module_get_module(itr);
-                                r = install_module(mod);
+                                r = install_module(ctx, mod);
                                 kmod_module_unref(mod);
                                 if ((r < 0) && !arg_optional) {
                                         if (!arg_silent)
@@ -1935,7 +2096,7 @@ static int install_modules(int argc, char **argv)
                                 }
                                 kmod_list_foreach(itr, modlist) {
                                         mod = kmod_module_get_module(itr);
-                                        r = install_module(mod);
+                                        r = install_module(ctx, mod);
                                         kmod_module_unref(mod);
                                         if ((r < 0) && !arg_optional) {
                                                 if (!arg_silent)
@@ -1986,7 +2147,7 @@ static int install_modules(int argc, char **argv)
                         }
                         kmod_list_foreach(itr, modlist) {
                                 mod = kmod_module_get_module(itr);
-                                r = install_module(mod);
+                                r = install_module(ctx, mod);
                                 kmod_module_unref(mod);
                                 if ((r < 0) && !arg_optional) {
                                         if (!arg_silent)
@@ -2088,8 +2249,9 @@ int main(int argc, char **argv)
 
         items = hashmap_new(string_hash_func, string_compare_func);
         items_failed = hashmap_new(string_hash_func, string_compare_func);
+        processed_suppliers = hashmap_new(string_hash_func, string_compare_func);
 
-        if (!items || !items_failed || !modules_loaded) {
+        if (!items || !items_failed || !processed_suppliers || !modules_loaded) {
                 log_error("Out of memory");
                 r = EXIT_FAILURE;
                 goto finish1;
@@ -2150,9 +2312,22 @@ finish2:
         while ((i = hashmap_steal_first(items_failed)))
                 item_free(i);
 
+        Hashmap *h;
+        while ((h = hashmap_steal_first(modules_suppliers))) {
+                while ((i = hashmap_steal_first(h))) {
+                        item_free(i);
+                }
+                hashmap_free(h);
+        }
+
+        while ((i = hashmap_steal_first(processed_suppliers)))
+                item_free(i);
+
         hashmap_free(items);
         hashmap_free(items_failed);
         hashmap_free(modules_loaded);
+        hashmap_free(modules_suppliers);
+        hashmap_free(processed_suppliers);
 
         if (arg_mod_filter_path)
                 regfree(&mod_filter_path);

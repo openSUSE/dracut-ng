@@ -60,6 +60,11 @@ if ! ${PKG_CONFIG} --exists --print-errors " libkmod >= 23 "; then
     exit 1
 fi
 
+if ! ${CC} -c -o /dev/null /dev/null &> /dev/null; then
+    echo "dracut needs a C compiler (${CC} not found)." >&2
+    exit 1
+fi
+
 cat << EOF > conftest.c
 #include <fts.h>
 int main() {

@@ -112,7 +112,7 @@ struct ArchiveState {
     // offset from the start of this archive
     off: u64,
     // next mapped inode number, used instead of source file inode numbers to
-    // ensure reproducability. XXX: should track inode per mapped dev?
+    // ensure reproducibility. XXX: should track inode per mapped dev?
     ino: u32,
 }
 
@@ -286,7 +286,7 @@ fn archive_path<W: Seek + Write>(
     mut writer: W,
 ) -> std::io::Result<()> {
     let inpath = path;
-    let mut outpath = path.clone();
+    let mut outpath = path;
     let mut datalen: u32 = 0;
     let mut rmajor: u32 = 0;
     let mut rminor: u32 = 0;

@@ -2,19 +2,26 @@
 
 export LANG=C
 
-COMMAND="$1"
-KERNEL_VERSION="$2"
+COMMAND="${1:?}"
+KERNEL_VERSION="${2:?}"
 BOOT_DIR_ABS="${3%/*}/0-rescue"
 KERNEL_IMAGE="$4"
 
-# Skip this plugin if we're using a different generator. If nothing is specified,
-# assume we're wanted since we're installed.
-if [ "${KERNEL_INSTALL_INITRD_GENERATOR:-dracut}" != "dracut" ]; then
+# If the initrd was provided on the kernel command line, we shouldn't generate our own.
+if [[ "$COMMAND" = "add" && "$#" -gt 4 ]]; then
     exit 0
 fi
 
-# Do not attempt to create a rescue image when working with UKIs
-if [[ $KERNEL_INSTALL_LAYOUT == "uki" || $KERNEL_INSTALL_IMAGE_TYPE == "uki" ]]; then
+# Do not attempt to create initramfs if the supplied image is already a UKI
+if [[ "$KERNEL_INSTALL_IMAGE_TYPE" = "uki" ]]; then
+    exit 0
+fi
+
+if [[ "$KERNEL_INSTALL_UKI_GENERATOR" = "dracut" ]]; then
+    # Rescue images currently not compatible with UKIs
+    exit 0
+elif [[ "${KERNEL_INSTALL_INITRD_GENERATOR:-dracut}" != "dracut" ]]; then
+    # We are not the initrd generator
     exit 0
 fi
 
@@ -113,7 +120,6 @@ case "$COMMAND" in
             fi
         done
 
-        # shellcheck disable=SC2154
         if [[ $dracut_rescue_image != "yes" ]]; then
             [[ $KERNEL_INSTALL_VERBOSE == 1 ]] \
                 && echo "Skipping, 'dracut_rescue_image' not set to 'yes' in any dracut configuration file"

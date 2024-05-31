@@ -337,7 +337,7 @@ getoptcomma() {
 # Splits given string 'str' with separator 'sep' into variables 'var1', 'var2',
 # 'varN'.  If number of fields is less than number of variables, remaining are
 # not set.  If number of fields is greater than number of variables, the last
-# variable takes remaining fields.  In short - it acts similary to 'read'.
+# variable takes remaining fields.  In short - it acts similarly to 'read'.
 #
 # splitsep sep str var1 var2 varN
 #
@@ -451,7 +451,7 @@ die() {
     fi
 
     if [ -n "$DRACUT_SYSTEMD" ]; then
-        systemctl --no-block --force halt
+        systemctl --no-block --force poweroff
     fi
 
     exit 1
@@ -973,25 +973,25 @@ emergency_shell() {
     _emergency_action=$(getarg rd.emergency)
     [ -z "$_emergency_action" ] \
         && [ -e /run/initramfs/.die ] \
-        && _emergency_action=halt
+        && _emergency_action=poweroff
 
     if getargbool 1 rd.shell -d -y rdshell || getarg rd.break -d rdbreak; then
         _emergency_shell "$_rdshell_name"
     else
         source_hook "$hook"
         warn "$action has failed. To debug this issue add \"rd.shell rd.debug\" to the kernel command line."
-        [ -z "$_emergency_action" ] && _emergency_action=halt
+        [ -z "$_emergency_action" ] && _emergency_action=poweroff
     fi
 
     case "$_emergency_action" in
         reboot)
-            reboot || exit 1
+            reboot -f || exit 1
             ;;
         poweroff)
-            poweroff || exit 1
+            poweroff -f || exit 1
             ;;
         halt)
-            halt || exit 1
+            halt -f || exit 1
             ;;
     esac
 }
@@ -1130,6 +1130,18 @@ show_memstats() {
     esac
 }
 
+# parameter: <memory_name:>  example: MemTotal:
+# Check /proc/meminfo
+# echo the field value, if present.
+check_meminfo() {
+    local - m sz
+    set +x
+    while read -r m sz _ || [ "$m" ]; do
+        [ "$m" = "$1" ] && echo "$sz" && return 0
+    done < /proc/meminfo
+    return 1
+}
+
 remove_hostonly_files() {
     rm -fr /etc/cmdline /etc/cmdline.d/*.conf "$hookdir"/initqueue/finished/*.sh
     if [ -f /lib/dracut/hostonly-files ]; then
@@ -1150,29 +1162,4 @@ load_fstype() {
         [ "${fs:-$d}" = "$_fs" ] && return 0
     done < /proc/filesystems
     modprobe "$1"
-}
-
-# parameter: size of live image
-# calls emergency shell if ram size is too small for the image
-check_live_ram() {
-    minmem=$(getarg rd.minmem)
-    minmem=${minmem:-1024}
-    imgsize=$1
-    memsize=$(($(sed -n 's/MemTotal: *\([[:digit:]]*\).*/\1/p' /proc/meminfo) / 1024))
-
-    if [ -z "$imgsize" ]; then
-        warn "Image size could not be determined"
-        return 0
-    fi
-
-    if [ $((memsize - imgsize)) -lt "$minmem" ]; then
-        sed -i "N;/and attach it to a bug report./s/echo$/echo\n\
-         echo \n\
-         echo 'Warning!!!'\n\
-         echo 'The memory size of your system is too small for this live image.'\n\
-         echo 'Expect killed processes due to out of memory conditions.'\n\
-         echo \n/" /usr/bin/dracut-emergency
-
-        emergency_shell
-    fi
 }

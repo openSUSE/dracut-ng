@@ -6,10 +6,13 @@
 check() {
 
     # If the binary(s) requirements are not fulfilled the module can't be installed.
-    require_binaries "$systemdutildir"/systemd-pcrextend || return 1
+    # systemd-255 renamed the binary, check for old and new location.
+    if ! require_binaries "$systemdutildir"/systemd-pcrphase \
+        && ! require_binaries "$systemdutildir"/systemd-pcrextend; then
+        return 1
+    fi
 
-    # Return 255 to only include the module, if another module requires it.
-    return 255
+    return 0
 
 }
 
@@ -27,6 +30,7 @@ depends() {
 install() {
 
     inst_multiple -o \
+        "$systemdutildir"/systemd-pcrphase \
         "$systemdutildir"/systemd-pcrextend \
         "$systemdsystemunitdir"/systemd-pcrphase-initrd.service \
         "$systemdsystemunitdir/systemd-pcrphase-initrd.service.d/*.conf" \

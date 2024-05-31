@@ -1,11 +1,13 @@
-dracut
-====
+dracut-ng
+=========
 
-dracut is an event driven initramfs infrastructure.
+dracut-ng is an event driven initramfs infrastructure.
 
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](docs/CODE_OF_CONDUCT.md)
+[![Packaging status](https://repology.org/badge/tiny-repos/dracut.svg)](https://repology.org/project/dracut/versions)
+[![latest packaged version(s)](https://repology.org/badge/latest-versions/dracut.svg)](https://repology.org/project/dracut/versions)
 
-dracut (the tool) is used to create an initramfs image by copying tools
+dracut-ng (the tool) is used to create an initramfs image by copying tools
 and files from an installed system and combining it with the
 dracut framework, usually found in /usr/lib/dracut/modules.d.
 
@@ -30,21 +32,20 @@ Documentation:
  - [Introduction](man/dracut.asc)
  - [User Manual](man/dracut.usage.asc)
 
-Currently dracut is developed on [github.com](https://github.com/dracutdevs/dracut).
+Currently dracut-ng is developed on [github.com](https://github.com/dracut-ng/dracut-ng).
 
-The release tarballs are [here](https://github.com/dracutdevs/dracut/releases).
+The release tarballs are [here](https://github.com/dracut-ng/dracut-ng/releases).
 
-Gitter (chat):
- - https://gitter.im/dracutdevs/Lobby
+Chat (Matrix):
+ - https://matrix.to/#/#dracut-ng:matrix.org
 
 See [News](NEWS.md) for information about changes in the releases and
-the [Wiki](https://github.com/dracutdevs/dracut/wiki) to share information.
+the [Wiki](https://github.com/dracut-ng/dracut-ng/wiki) to share information.
 
-See the github issue tracker for things which still need to be done and [Hacking](docs/HACKING.md)
-for some instructions on how to get started.  There is also a mailing list
-that is being used for the discussion -- initramfs@vger.kernel.org.
-It is a typical vger list, send mail to majordomo@vger.kernel.org with body
-of 'subscribe initramfs email@host.com'
+See the [GitHub issue tracker](https://github.com/dracut-ng/dracut-ng/issues) for
+things which still need to be done. This is also the main place used for
+discussions.
+See [Hacking](docs/HACKING.md) for some instructions on how to get started.
 
 
 Licensed under the GPLv2

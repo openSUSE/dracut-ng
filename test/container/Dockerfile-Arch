@@ -1,25 +1,52 @@
 FROM docker.io/archlinux
 
-MAINTAINER https://github.com/dracutdevs/dracut
-
-ENV container docker
-LABEL RUN="docker run -it --name NAME --privileged --ipc=host --net=host --pid=host -e NAME=NAME -e IMAGE=IMAGE IMAGE"
-
-RUN echo 'export DRACUT_NO_XATTR=1 KVERSION=$(cd /lib/modules; ls -1 | tail -1)' > /etc/profile.d/dracut-test.sh
-
-# Install needed packages for the dracut CI container
 RUN pacman --noconfirm -Syu \
-    linux dash strace dhclient asciidoc cpio pigz squashfs-tools \
-    qemu btrfs-progs mdadm dmraid nfs-utils nfsidmap lvm2 nbd \
-    dhcp networkmanager multipath-tools vi tcpdump open-iscsi connman \
-    git shfmt shellcheck astyle which base-devel glibc parted ntfs-3g && yes | pacman -Scc
-
-RUN useradd -m build
-RUN su build -c 'cd && git clone https://aur.archlinux.org/perl-config-general.git && cd perl-config-general && makepkg -s --noconfirm'
-RUN pacman -U --noconfirm ~build/perl-config-general/*.pkg.tar.*
-RUN su build -c 'cd && git clone https://aur.archlinux.org/tgt.git && cd tgt && makepkg -s --noconfirm'
-RUN pacman -U --noconfirm ~build/tgt/*.pkg.tar.*
-RUN rm -fr ~build
-
-# Set default command
-CMD ["/usr/bin/bash"]
+    asciidoc \
+    astyle \
+    base-devel \
+    bluez \
+    btrfs-progs \
+    busybox \
+    cargo \
+    cifs-utils \
+    connman \
+    cpio \
+    dash \
+    dhclient \
+    dhcp \
+    dmraid \
+    elfutils \
+    f2fs-tools \
+    git \
+    glibc \
+    jq \
+    linux \
+    lvm2 \
+    lzop \
+    mdadm \
+    multipath-tools \
+    nbd \
+    networkmanager \
+    nfsidmap \
+    nfs-utils \
+    ntfs-3g \
+    nvme-cli \
+    open-iscsi \
+    openssh \
+    parted \
+    pigz \
+    plymouth \
+    qemu \
+    qrencode \
+    rng-tools \
+    sbsigntools \
+    shellcheck \
+    shfmt \
+    squashfs-tools \
+    strace \
+    systemd-ukify \
+    tcpdump \
+    tgt \
+    tpm2-tools \
+    vi \
+    && yes | pacman -Scc

@@ -4,12 +4,15 @@
 check() {
     [[ $mount_needs ]] && return 1
 
+    # If the binary(s) requirements are not fulfilled the module can't be installed
+    require_binaries "$systemdutildir"/systemd || return 1
+
     return 0
 }
 
 # called by dracut
 depends() {
-    echo "systemd-initrd"
+    echo "systemd-initrd systemd-ask-password"
     return 0
 }
 

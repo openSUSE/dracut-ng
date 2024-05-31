@@ -54,7 +54,6 @@ find_binary() {
     [[ -z ${1##/*} ]] || _delim="/"
 
     if [[ $1 == *.so* ]]; then
-        # shellcheck disable=SC2154
         for l in $libdirs; do
             _path="${l}${_delim}${1}"
             if { $DRACUT_LDD "${dracutsysrootdir}${_path}" &> /dev/null; }; then
@@ -91,9 +90,9 @@ ldconfig_paths() {
     $DRACUT_LDCONFIG ${dracutsysrootdir:+-r ${dracutsysrootdir} -f /etc/ld.so.conf} -pN 2> /dev/null | grep -E -v '/(lib|lib64|usr/lib|usr/lib64)/[^/]*$' | sed -n 's,.* => \(.*\)/.*,\1,p' | sort | uniq
 }
 
-# Version comparision function.  Assumes Linux style version scheme.
+# Version comparison function.  Assumes Linux style version scheme.
 # $1 = version a
-# $2 = comparision op (gt, ge, eq, le, lt, ne)
+# $2 = comparison op (gt, ge, eq, le, lt, ne)
 # $3 = version b
 vercmp() {
     local _n1
@@ -654,6 +653,16 @@ get_blockdev_drv_through_sys() {
     echo "$_block_mods"
 }
 
+# get_lvm_dm_dev <maj:min>
+# If $1 is an LVM device-mapper device, return the path to its dm directory
+get_lvm_dm_dev() {
+    local _majmin _dm
+    _majmin="$1"
+    _dm=/sys/dev/block/$_majmin/dm
+    [[ ! -f $_dm/uuid || $(< "$_dm"/uuid) != LVM-* ]] && return 1
+    printf "%s" "$_dm"
+}
+
 # ugly workaround for the lvm design
 # There is no volume group device,
 # so, there are no slave devices for volume groups.
@@ -661,10 +670,10 @@ get_blockdev_drv_through_sys() {
 # but you cannot create the logical volume without the volume group.
 # And the volume group might be bigger than the devices the LV needs.
 check_vol_slaves() {
-    local _vg _pv _dm _majmin
+    local _vg _pv _majmin _dm
     _majmin="$2"
-    _dm=/sys/dev/block/$_majmin/dm
-    [[ -f $_dm/uuid && $(< "$_dm"/uuid) =~ LVM-* ]] || return 1
+    _dm=$(get_lvm_dm_dev "$_majmin")
+    [[ -z $_dm ]] && return 1 # not an LVM device-mapper device
     _vg=$(dmsetup splitname --noheadings -o vg_name "$(< "$_dm/name")")
     # strip space
     _vg="${_vg//[[:space:]]/}"
@@ -677,10 +686,10 @@ check_vol_slaves() {
 }
 
 check_vol_slaves_all() {
-    local _vg _pv _majmin
+    local _vg _pv _majmin _dm
     _majmin="$2"
-    _dm="/sys/dev/block/$_majmin/dm"
-    [[ -f $_dm/uuid && $(< "$_dm"/uuid) =~ LVM-* ]] || return 1
+    _dm=$(get_lvm_dm_dev "$_majmin")
+    [[ -z $_dm ]] && return 1 # not an LVM device-mapper device
     _vg=$(dmsetup splitname --noheadings -o vg_name "$(< "$_dm/name")")
     # strip space
     _vg="${_vg//[[:space:]]/}"
@@ -778,10 +787,12 @@ get_ucode_file() {
 # Not every device in /dev/mapper should be examined.
 # If it is an LVM device, touch only devices which have /dev/VG/LV symlink.
 lvm_internal_dev() {
-    local dev_dm_dir=/sys/dev/block/$1/dm
-    [[ ! -f $dev_dm_dir/uuid || $(< "$dev_dm_dir"/uuid) != LVM-* ]] && return 1 # Not an LVM device
+    local _majmin _dm
+    _majmin="$1"
+    _dm=$(get_lvm_dm_dev "$_majmin")
+    [[ -z $_dm ]] && return 1 # not an LVM device-mapper device
     local DM_VG_NAME DM_LV_NAME DM_LV_LAYER
-    eval "$(dmsetup splitname --nameprefixes --noheadings --rows "$(< "$dev_dm_dir"/name)" 2> /dev/null)"
+    eval "$(dmsetup splitname --nameprefixes --noheadings --rows "$(< "$_dm/name")" 2> /dev/null)"
     [[ ${DM_VG_NAME} ]] && [[ ${DM_LV_NAME} ]] || return 0 # Better skip this!
     [[ ${DM_LV_LAYER} ]] || [[ ! -L /dev/${DM_VG_NAME}/${DM_LV_NAME} ]]
 }
@@ -1059,14 +1070,32 @@ pe_file_format() {
     return 1
 }
 
-# Get the sectionAlignment data from the PE header
+# Get specific data from the PE header
+pe_get_header_data() {
+    local data_header
+    [[ $# -ne "2" ]] && return 1
+    [[ $(pe_file_format "$1") -eq 1 ]] && return 1
+    data_header=$(objdump -p "$1" \
+        | awk -v data="$2" '{if ($1 == data){print $2}}')
+    echo "$data_header"
+}
+
+# Get the SectionAlignment data from the PE header
 pe_get_section_align() {
     local align_hex
     [[ $# -ne "1" ]] && return 1
-    [[ $(pe_file_format "$1") -eq 1 ]] && return 1
-    align_hex=$(objdump -p "$1" \
-        | awk '{if ($1 == "SectionAlignment"){print $2}}')
+    align_hex=$(pe_get_header_data "$1" "SectionAlignment")
+    [[ $? -eq 1 ]] && return 1
     echo "$((16#$align_hex))"
+}
+
+# Get the ImageBase data from the PE header
+pe_get_image_base() {
+    local base_image
+    [[ $# -ne "1" ]] && return 1
+    base_image=$(pe_get_header_data "$1" "ImageBase")
+    [[ $? -eq 1 ]] && return 1
+    echo "$((16#$base_image))"
 }
 
 getcmdline() {

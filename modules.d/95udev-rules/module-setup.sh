@@ -8,8 +8,6 @@ install() {
     # ultimately, /lib/initramfs/rules.d or somesuch which includes links/copies
     # of the rules we want so that we just copy those in would be best
     inst_multiple udevadm cat uname blkid
-    inst_dir /etc/udev
-    inst_multiple -o /etc/udev/udev.conf
 
     [[ -d ${initdir}/$systemdutildir ]] || mkdir -p "${initdir}/$systemdutildir"
     for _i in "${systemdutildir}"/systemd-udevd "${udevdir}"/udevd /sbin/udevd; do
@@ -33,7 +31,6 @@ install() {
         59-scsi-sg3_utils.rules \
         60-block.rules \
         60-cdrom_id.rules \
-        60-pcmcia.rules \
         60-persistent-storage.rules \
         64-btrfs.rules \
         70-uaccess.rules \
@@ -44,8 +41,6 @@ install() {
         80-net-name-slot.rules 80-net-setup-link.rules \
         "$moddir/59-persistent-storage.rules" \
         "$moddir/61-persistent-storage.rules"
-
-    prepare_udev_rules 59-persistent-storage.rules 61-persistent-storage.rules
 
     # only include persistent network device name rules if network is set up
     # in the initrd
@@ -81,12 +76,14 @@ install() {
         "${udevdir}"/path_id \
         "${udevdir}"/input_id \
         "${udevdir}"/scsi_id \
-        "${udevdir}"/usb_id \
-        "${udevdir}"/pcmcia-socket-startup \
-        "${udevdir}"/pcmcia-check-broken-cis
-
-    inst_multiple -o /etc/pcmcia/config.opts
+        "${udevdir}"/usb_id
 
     inst_libdir_file "libnss_files*"
 
+    # Install the hosts local user configurations if enabled.
+    if [[ $hostonly ]]; then
+        inst_dir /etc/udev
+        inst_multiple -H -o \
+            /etc/udev/udev.conf
+    fi
 }

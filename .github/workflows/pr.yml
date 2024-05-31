@@ -9,11 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check-out the repo under $GITHUB_WORKSPACE
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Run Commisery
-      uses: dracutdevs/commisery-action@master
+      uses: tomtom-international/commisery-action@master
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        pull_request: ${{ github.event.number }}
-
+        # don't validate the pull request title
+        validate-pull-request: false
+        validate-pull-request-title-bump: false

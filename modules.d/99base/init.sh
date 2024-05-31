@@ -137,8 +137,10 @@ getargs 'rd.break=pre-udev' -d 'rdbreak=pre-udev' && emergency_shell -n pre-udev
 source_hook pre-udev
 
 UDEV_LOG=err
-getargbool 0 rd.udev.info -d -y rdudevinfo && UDEV_LOG=info
-getargbool 0 rd.udev.debug -d -y rdudevdebug && UDEV_LOG=debug
+getargbool 0 rd.udev.log_level=info -d rd.udev.log-priority=info -d rd.udev.info -d -y rdudevinfo \
+    && UDEV_LOG=info
+getargbool 0 rd.udev.log_level=debug -d rd.udev.log-priority=debug -d rd.udev.debug -d -y rdudevdebug \
+    && UDEV_LOG=debug
 
 # start up udev and trigger cold plugs
 UDEV_LOG=$UDEV_LOG "$systemdutildir"/systemd-udevd --daemon --resolve-names=never
@@ -228,7 +230,7 @@ source_hook pre-mount
 
 getargs 'rd.break=mount' -d 'rdbreak=mount' && emergency_shell -n mount "Break before mount"
 # mount scripts actually try to mount the root filesystem, and may
-# be sourced any number of times. As soon as one suceeds, no more are sourced.
+# be sourced any number of times. As soon as one succeeds, no more are sourced.
 _i_mount=0
 while :; do
     if ismounted "$NEWROOT"; then
