@@ -24,12 +24,12 @@
 %endif
 
 Name:           dracut
-Version:        059
+Version:        102
 Release:        0
 Summary:        Event driven initramfs infrastructure
 License:        GPLv2+ and LGPLv2+ and GPLv2
 Group:          System/Base
-URL:            https://github.com/dracutdevs/dracut/wiki
+URL:            https://github.com/dracut-ng/dracut-ng/wiki
 Source0:        dracut-%{version}.tar.xz
 Source1:        dracut-rpmlintrc
 Source2:        README.susemaint
@@ -146,11 +146,8 @@ rm -rf %{buildroot}%{dracutlibdir}/modules.d/81cio_ignore
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/91zipl
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/95dasd
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/95dasd_mod
-rm -rf %{buildroot}%{dracutlibdir}/modules.d/95dasd_rules
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/95dcssblk
-rm -rf %{buildroot}%{dracutlibdir}/modules.d/95qeth_rules
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/95zfcp
-rm -rf %{buildroot}%{dracutlibdir}/modules.d/95zfcp_rules
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/95znet
 %else
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/00warpclock
@@ -289,7 +286,7 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %files
 %license COPYING
 %doc README.md NEWS.md AUTHORS dracut.html
-%doc docs/README.cross docs/README.generic docs/README.kernel
+%doc docs/README.cross docs/README.kernel
 %doc docs/HACKING.md docs/dracut.png docs/dracut.svg
 %{_bindir}/dracut
 %{_bindir}/lsinitrd
@@ -352,7 +349,9 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %endif
 %{dracutlibdir}/modules.d/01systemd-ac-power
 %{dracutlibdir}/modules.d/01systemd-ask-password
+%{dracutlibdir}/modules.d/01systemd-bsod
 %{dracutlibdir}/modules.d/01systemd-coredump
+%{dracutlibdir}/modules.d/01systemd-creds
 %{dracutlibdir}/modules.d/01systemd-hostnamed
 %{dracutlibdir}/modules.d/01systemd-initrd
 %{dracutlibdir}/modules.d/01systemd-integritysetup
@@ -388,6 +387,7 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/35network-manager
 %{dracutlibdir}/modules.d/40network
 %{dracutlibdir}/modules.d/45ifcfg
+%{dracutlibdir}/modules.d/45net-lib
 %{dracutlibdir}/modules.d/45url-lib
 %{dracutlibdir}/modules.d/50drm
 %{dracutlibdir}/modules.d/50plymouth
@@ -417,10 +417,13 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/90lvm
 %{dracutlibdir}/modules.d/90mdraid
 %{dracutlibdir}/modules.d/90multipath
+%{dracutlibdir}/modules.d/90numlock
 %{dracutlibdir}/modules.d/90nvdimm
 %{dracutlibdir}/modules.d/90overlayfs
+%{dracutlibdir}/modules.d/90pcmcia
 %{dracutlibdir}/modules.d/90qemu
 %{dracutlibdir}/modules.d/90qemu-net
+%{dracutlibdir}/modules.d/90systemd-cryptsetup
 %{dracutlibdir}/modules.d/91crypt-gpg
 %{dracutlibdir}/modules.d/91crypt-loop
 %{dracutlibdir}/modules.d/91fido2
@@ -433,7 +436,6 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/95cifs
 %ifarch s390 s390x
 %{dracutlibdir}/modules.d/95dasd_mod
-%{dracutlibdir}/modules.d/95dasd_rules
 %{dracutlibdir}/modules.d/95dcssblk
 %endif
 %{dracutlibdir}/modules.d/95debug
@@ -445,9 +447,6 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/95nbd
 %{dracutlibdir}/modules.d/95nfs
 %{dracutlibdir}/modules.d/95nvmf
-%ifarch s390 s390x
-%{dracutlibdir}/modules.d/95qeth_rules
-%endif
 %{dracutlibdir}/modules.d/95resume
 %{dracutlibdir}/modules.d/95rootfs-block
 %{dracutlibdir}/modules.d/95ssh-client
@@ -455,9 +454,6 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/95udev-rules
 %{dracutlibdir}/modules.d/95virtfs
 %{dracutlibdir}/modules.d/95virtiofs
-%ifarch s390 s390x
-%{dracutlibdir}/modules.d/95zfcp_rules
-%endif
 %{dracutlibdir}/modules.d/97biosdevname
 %ifarch %ix86
 %exclude %{dracutlibdir}/modules.d/96securityfs
