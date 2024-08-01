@@ -1,5 +1,80 @@
 [Rendered view](https://github.com/dracut-ng/dracut-ng/blob/master/NEWS.md)
 
+dracut-ng-103
+=============
+#### Contributors
+
+- Antonio Alvarez Feijoo <antonio.feijoo@suse.com>
+- Antonio Álvarez Feijoo <antonio.feijoo@suse.com>
+- Daniel Molkentin <daniel.molkentin@suse.com>
+- Thomas Blume <thomas.blume@suse.com>
+- Martin Wilck <mwilck@suse.de>
+- Laszlo Gombos <laszlo.gombos@gmail.com>
+- David Disseldorp <ddiss@suse.de>
+- Henrik Gombos <henrik99999@gmail.com>
+- наб <nabijaczleweli@nabijaczleweli.xyz>
+- Ludwig Nussel <ludwig.nussel@suse.de>
+- Andrew Ammerlaan <andrewammerlaan@gentoo.org>
+- Frederick Grose <fgrose@sugarlabs.org>
+- Adrien Thierry <athierry@redhat.com>
+- Alberto Planas <aplanas@gmail.com>
+- Benjamin Drung <benjamin.drung@canonical.com>
+- Cornelius Hoffmann <coding@hoffmn.de>
+- David Teigland <teigland@redhat.com>
+- Georg Pfuetzenreuter <mail@georg-pfuetzenreuter.net>
+- Harald Hoyer <harald@profian.com>
+- Manuel Fombuena <mfombuena@innovara.co.uk>
+- Ondrej Holecek <oholecek@suse.com>
+- Pavel Valena <pvalena@redhat.com>
+- Tao Liu <ltao@redhat.com>
+- 0x5c <dev@0x5c.io>
+- Alberto Planas <aplanas@suse.com>
+- Alexander Wenzel <alexander.wenzel@qbeyond.de>
+- Alper Nebi Yasak <alpernebiyasak@gmail.com>
+- Andrew Halaney <ahalaney@redhat.com>
+- Antonio Álvarez Feijoo <89986513+aafeijoo-suse@users.noreply.github.com>
+- Beniamino Galvani <bgalvani@redhat.com>
+- Benjamin Marzinski <bmarzins@redhat.com>
+- Bernhard M. Wiedemann <bwiedemann@suse.de>
+- Brandon Sloane <btsloane@verizon.net>
+- Cristian Rodríguez <crrodriguez@opensuse.org>
+- Daniel McIlvaney <damcilva@microsoft.com>
+- Daniel Molkentin <daniel@molkentin.de>
+- Daniel P. Berrangé <berrange@redhat.com>
+- David Cassany <dcassany@suse.com>
+- Dmitry Klochkov <dmitry.klochkov@bell-sw.com>
+- Fabian Vogt <fvogt@suse.com>
+- Fabian Vogt <fvogt@suse.de>
+- Frantisek Sumsal <frantisek@sumsal.cz>
+- Hans de Goede <hdegoede@redhat.com>
+- Ihno Krumreich <ihno@suse.com>
+- Jan Engelhardt <jengelh@inai.de>
+- Jeremy Linton <jeremy.linton@arm.com>
+- John Meneghini <jmeneghi@redhat.com>
+- Jóhann B. Guðmundsson <johannbg@gmail.com>
+- Khem Raj <raj.khem@gmail.com>
+- Lee Duncan <lduncan@suse.com>
+- LinkTed <link.ted@mailbox.org>
+- Lubomir Rintel <lkundrak@v3.sk>
+- Lukas Nykryn <lnykryn@redhat.com>
+- Marcus Meissner <meissner@suse.de>
+- Matthias Berndt <matthias_berndt@gmx.de>
+- Michal Koutný <mkoutny@suse.com>
+- Michał Zegan <webczat@outlook.com>
+- Neal Gompa <ngompa13@gmail.com>
+- Oscar Salvador <osalvador@suse.de>
+- Peter Robinson <pbrobinson@fedoraproject.org>
+- Sam James <sam@gentoo.org>
+- Sergio E. Nemirowski <sergio@outerface.net>
+- Stefan Weiberg <2744377+suntorytimed@users.noreply.github.com>
+- Thomas Renninger <trenn@suse.com>
+- Tianhao Chai <cth451@gmail.com>
+- Valentin Lefebvre <valentin.lefebvre@suse.com>
+- Vitaly Kuznetsov <vkuznets@redhat.com>
+- Zbigniew Jędrzejewski-Szmek <zbyszek@in.waw.pl>
+- innovara <fombuena@outlook.com>
+- lilinjie <lilinjie@uniontech.com>
+
 dracut-ng-102
 =============
 
