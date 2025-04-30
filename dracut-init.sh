@@ -433,7 +433,7 @@ inst_rule_programs() {
     # shellcheck disable=SC2013
     for _prog in $(sed -nr 's/.*PROGRAM==?"([^ "]+).*/\1/p' "$1"); do
         _bin=""
-        if [[ -x ${udevdir}/$_prog ]]; then
+        if [[ -x ${dracutsysrootdir}${udevdir}/$_prog ]]; then
             _bin="${udevdir}"/$_prog
         elif [[ ${_prog/\$env\{/} == "$_prog" ]]; then
             _bin=$(find_binary "$_prog") || {
@@ -448,7 +448,7 @@ inst_rule_programs() {
     # shellcheck disable=SC2013
     for _prog in $(sed -nr 's/.*RUN[+=]=?"([^ "]+).*/\1/p' "$1"); do
         _bin=""
-        if [[ -x ${udevdir}/$_prog ]]; then
+        if [[ -x ${dracutsysrootdir}${udevdir}/$_prog ]]; then
             _bin=${udevdir}/$_prog
         elif [[ ${_prog/\$env\{/} == "$_prog" ]] && [[ ${_prog} != "/sbin/initqueue" ]]; then
             _bin=$(find_binary "$_prog") || {
@@ -463,7 +463,7 @@ inst_rule_programs() {
     # shellcheck disable=SC2013
     for _prog in $(sed -nr 's/.*IMPORT\{program\}==?"([^ "]+).*/\1/p' "$1"); do
         _bin=""
-        if [[ -x ${udevdir}/$_prog ]]; then
+        if [[ -x ${dracutsysrootdir}${udevdir}/$_prog ]]; then
             _bin=${udevdir}/$_prog
         elif [[ ${_prog/\$env\{/} == "$_prog" ]]; then
             _bin=$(find_binary "$_prog") || {
