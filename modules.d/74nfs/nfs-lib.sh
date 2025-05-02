@@ -106,7 +106,7 @@ anaconda_nfsv6_to_var() {
 # fill in missing server/path from DHCP options.
 nfsroot_from_dhcp() {
     local f
-    for f in /tmp/net.$1.override /tmp/dhclient.$1.dhcpopts; do
+    for f in /tmp/net.$1.override /tmp/dhclient.$1.dhcpopts /tmp/leaseinfo.$1.dhcp.*; do
         # shellcheck disable=SC1090
         [ -f "$f" ] && . "$f"
     done
@@ -115,6 +115,7 @@ nfsroot_from_dhcp() {
     [ -z "$server" ] && server=$srv
     [ -z "$server" ] && server=$new_next_server
     [ -z "$server" ] && server=$new_dhcp_server_identifier
+    [ -z "$server" ] && server=$BOOTSERVERADDR
     [ -z "$server" ] && server=${new_root_path%%:*}
 }
 

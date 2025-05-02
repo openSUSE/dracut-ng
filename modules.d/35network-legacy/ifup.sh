@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # We don't need to check for ip= errors here, that is handled by the
 # cmdline parser script
@@ -22,6 +22,190 @@ if [ "$netif" = "lo" ]; then
     ip addr add 127.0.0.1/8 dev lo
     exit 0
 fi
+
+dhcp_backend() {
+    type wicked >/dev/null 2>&1 && \
+    echo "wicked" || \
+    echo "dhclient"
+}
+
+dhcp_wicked_apply() {
+    unset IPADDR INTERFACE BROADCAST NETWORK PREFIXLEN ROUTES GATEWAYS MTU HOSTNAME DNSDOMAIN DNSSEARCH DNSSERVERS
+    if [ -f "/tmp/leaseinfo.${netif}.dhcp.ipv${1:1:1}" ]; then
+        . "/tmp/leaseinfo.${netif}.dhcp.ipv${1:1:1}"
+    else
+        warn "DHCP failed";
+        return 1
+    fi
+
+    if [ -z "${IPADDR}" ] || [ -z "${INTERFACE}" ]; then
+           warn "Missing crucial DHCP variables"
+           return 1
+    fi
+
+    # Assign IP address
+    ip $1 addr add "$IPADDR" ${BROADCAST:+broadcast $BROADCAST} dev "$INTERFACE"
+
+    # Assign provided routes
+    local r route=()
+    if [ -n "${ROUTES}" ]; then
+        for r in ${ROUTES}; do
+            route=(${r//,/ })
+            if [ ! ${route[2]} == "0.0.0.0" ]; then
+                gateway=" via ${route[2]}"
+            fi
+            ip $1 route add "${route[0]}"/"${route[1]}""$gateway" dev "$INTERFACE"
+        done
+    fi
+
+    # Assign provided routers
+    local g
+    if [ -n "${GATEWAYS}" ]; then
+        for g in ${GATEWAYS}; do
+            ip $1 route add default via "$g" dev "$INTERFACE" && break
+        done
+    fi
+
+    # Set MTU
+    [ -n "${MTU}" ] && ip $1 link set mtu "$MTU" dev "$INTERFACE"
+
+    # Setup hostname
+    [ -n "${HOSTNAME}" ] && echo $HOSTNAME > /proc/sys/kernel/hostname
+
+    # If nameserver= has not been specified, use what dhcp provides
+    if [ ! -s /tmp/net.$netif.resolv.conf.ipv${1:1:1} ]; then
+        if [ -n "${DNSDOMAIN}" ]; then
+            echo domain "${DNSDOMAIN}"
+        fi >> /tmp/net.$netif.resolv.conf.ipv${1:1:1}
+
+        if [ -n "${DNSSEARCH}" ]; then
+            echo search "${DNSSEARCH}"
+        fi >> /tmp/net.$netif.resolv.conf.ipv${1:1:1}
+
+        if  [ -n "${DNSSERVERS}" ] ; then
+            for s in ${DNSSERVERS}; do
+                echo nameserver "$s"
+            done
+        fi >> /tmp/net.$netif.resolv.conf.ipv${1:1:1}
+    fi
+    # copy resolv.conf if it doesn't exist yet, modify otherwise
+    if [ -e /tmp/net.$netif.resolv.conf.ipv${1:1:1} ] && [ ! -e /etc/resolv.conf ]; then
+        cp -f /tmp/net.$netif.resolv.conf.ipv${1:1:1} /etc/resolv.conf
+    else
+        if [ -n "$(sed -n '/^search .*$/p' /etc/resolv.conf)" ]; then
+            sed -i "s/\(^search .*\)$/\1 ${DNSSEARCH}/" /etc/resolv.conf
+        else
+            echo search ${DNSSEARCH} >> /etc/resolv.conf
+        fi
+        if  [ -n "${DNSSERVERS}" ] ; then
+            for s in ${DNSSERVERS}; do
+                echo nameserver "$s"
+            done
+        fi >> /etc/resolv.conf
+    fi
+
+    info "DHCP is finished successfully"
+    return 0
+
+}
+
+# USECASE?
+dhcp_wicked_read_ifcfg() {
+    unset PREFIXLEN LLADDR MTU REMOTE_IPADDR GATEWAY BOOTPROTO
+
+    if [ -e /etc/sysconfig/network/ifcfg-${netif} ] ; then
+        # Pull in existing configuration
+        . /etc/sysconfig/network/ifcfg-${netif}
+
+        # The first configuration can be anything
+        [ -n "$PREFIXLEN" ] && prefix=${PREFIXLEN}
+        [ -n "$LLADDR" ] && macaddr=${LLADDR}
+        [ -n "$MTU" ] && mtu=${MTU}
+        [ -n "$REMOTE_IPADDR" ] && server=${REMOTE_IPADDR}
+        [ -n "$GATEWAY" ] && gw=${GATEWAY}
+        [ -n "$BOOTPROTO" ] && autoconf=${BOOTPROTO}
+        return 0
+    fi
+    return 1
+}
+
+
+dhcp_dhclient_run() {
+    if [ -n "$_timeout" ]; then
+        if ! (dhclient --help 2>&1 | grep -q -F -- '--timeout' 2> /dev/null); then
+            warn "rd.net.timeout.dhcp has no effect because dhclient does not implement the --timeout option"
+            unset _timeout
+        fi
+    fi
+
+    dhclient "$@" \
+                 ${_timeout:+--timeout $_timeout} \
+                 -q \
+                 -1 \
+                 -cf /etc/dhclient.conf \
+                 -pf "/tmp/dhclient.$netif.pid" \
+                 -lf "/tmp/dhclient.$netif.lease" \
+                 "$netif" \
+            && return 0
+    return 1
+}
+
+dhcp_wicked_run() {
+    local _ipv=${1:-"-4"}
+
+    [ -d /var/lib/wicked ] || mkdir -p /var/lib/wicked
+
+    dhclient=
+    if [ "$_ipv" = "-6" ] ; then
+        ipv6_mode=
+        if [ -f "/tmp/net.$netif.auto6" ] ; then
+            ipv6_mode="auto"
+        else
+            ipv6_mode="managed"
+        fi
+        dhclient="wicked test dhcp6 -m $ipv6_mode"
+    else
+        dhclient="wicked test dhcp4"
+    fi
+
+    if ! linkup "$netif"; then
+        warn "Could not bring interface $netif up!"
+        return 1
+    fi
+
+    if dhcp_wicked_read_ifcfg ; then
+        [ -n "$macaddr" ] && ip "$_ipv" link set address $macaddr dev $netif
+        [ -n "$mtu" ] && ip "$_ipv" link set mtu $mtu dev $netif
+    fi
+
+    local needtimeout=0
+    local CMDLINE=$(getcmdline)
+    local cmdlineopt
+    for cmdlineopt in $CMDLINE; do
+        case "$cmdlineopt" in
+            rd.iscsi.*) ;&
+            rd.fcoe*) ;&
+            root=nfs:*) ;&
+            root=iscsi:*)
+                needtimeout=1
+                ;;
+        esac
+    done
+    if [ $needtimeout -eq 1 -a -z "$_timeout" ]; then
+        _timeout=60
+    fi
+
+    $dhclient ${_timeout:+--timeout $_timeout} --format leaseinfo --output "/tmp/leaseinfo.${netif}.dhcp.ipv${_ipv:1:1}" --request - $netif << EOF
+<request type="lease"/>
+EOF
+    dhcp_wicked_apply "$_ipv" || return $?
+
+    if [ "$_ipv" = "-6" ] ; then
+        wait_for_ipv6_dad $netif
+    fi
+
+    return 0
+}
 
 do_dhcp_parallel() {
     # dhclient-script will mark the netif up and generate the online
@@ -87,15 +271,11 @@ do_dhcp() {
 
     while [ "$_COUNT" -lt "$_DHCPRETRY" ]; do
         info "Starting dhcp for interface $netif"
-        dhclient "$@" \
-            ${_timeout:+--timeout "$_timeout"} \
-            -q \
-            -1 \
-            -cf /etc/dhclient.conf \
-            -pf "/tmp/dhclient.${netif}.pid" \
-            -lf "/tmp/dhclient.${netif}.lease" \
-            "$netif" \
-            && return 0
+        backend="$(dhcp_backend)"
+        dhcp_${backend}_run "$@" && return 0
+
+
+
         _COUNT=$((_COUNT + 1))
         [ "$_COUNT" -lt "$_DHCPRETRY" ] && sleep 1
     done
@@ -182,8 +362,14 @@ do_static() {
                     warn "Duplicate address detected for $ip for interface $netif."
                     return 1
                 fi
-            else
+            elif command -v arping > /dev/null; then
                 if ! arping -f -q -D -c 2 -I "$netif" "$ip"; then
+                    warn "Duplicate address detected for $ip for interface $netif."
+                    return 1
+                fi
+            else
+                wicked arp verify --quiet --count 2 --interval 1000 "$netif" "$ip"
+                if [ $? -eq 4 ]; then
                     warn "Duplicate address detected for $ip for interface $netif."
                     return 1
                 fi
@@ -195,6 +381,18 @@ do_static() {
 
     [ -n "$gw" ] && echo "ip route replace default via '$gw' dev '$netif'" > "/tmp/net.$netif.gw"
     [ -n "$hostname" ] && echo "echo '$hostname' > /proc/sys/kernel/hostname" > "/tmp/net.$netif.hostname"
+
+    for ifroute in /etc/sysconfig/network/ifroute-${netif} /etc/sysconfig/network/routes ; do
+        [ -e ${ifroute} ] || continue
+        # Pull in existing routing configuration
+        read ifr_dest ifr_gw ifr_mask ifr_if < ${ifroute}
+        [ -z "$ifr_dest" -o -z "$ifr_gw" ] && continue
+        if [ "$ifr_if" = "-" ] ; then
+            echo ip route add $ifr_dest via $ifr_gw >> /tmp/net.$netif.gw
+        else
+            echo ip route add $ifr_dest via $ifr_gw dev $ifr_if >> /tmp/net.$netif.gw
+        fi
+    done
 
     return 0
 }
@@ -472,6 +670,10 @@ for p in $(getargs ip=); do
                 do_dhcp -4
                 ;;
             single-dhcp)
+                if command -v wicked > /dev/null; then
+                    warn "DHCP in parallel on all available interfaces not available with wicked."
+                    exit 1
+                fi
                 do_dhcp_parallel -4
                 exit 0
                 ;;
@@ -516,6 +718,10 @@ for p in $(getargs ip=); do
             if [ -z "$manualup" ]; then
                 /sbin/netroot "$netif"
             fi
+        fi
+
+        if command -v wicked > /dev/null && [ -z "$manualup" ]; then
+            /sbin/netroot "$netif"
         fi
 
         exit $ret

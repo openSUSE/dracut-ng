@@ -54,6 +54,16 @@ install() {
         78-sound-card.rules \
         80-drivers.rules
 
+    # only include persistent network device name rules if network is set up
+    # in the initrd
+    # Avoid interference with systemd predictable network device naming
+    if dracut_module_included "network-legacy" || dracut_module_included "network-manager"; then
+        if [ -e /etc/udev/rules.d/70-persistent-net.rules ] && \
+           ! dracut_module_included "systemd-networkd"; then
+               [[ $hostonly ]] && inst_rules 70-persistent-net.rules
+        fi
+    fi
+
     {
         for i in cdrom tape dialout floppy; do
             if ! grep -qs "^$i:" "$initdir"/etc/group; then
