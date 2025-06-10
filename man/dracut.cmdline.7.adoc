@@ -633,6 +633,16 @@ same <interface>.
     times. __<peer>__ is optional and is the address of the remote endpoint
     for pointopoint interfaces and it may be followed by a slash and a decimal
     number, encoding the network prefix length.
+    __<netmask>__ can be specified either in four digit dot separated notation
+    or as decimal number network prefix length.
+
+[listing]
+.Example
+--
+    ip=192.168.100.99::192.168.100.222:255.255.255.0:myhost:ens10
+    ip=192.168.100.99::192.168.100.222:24:myhost:ens10
+    ip=[2001:DB8:2::99]::[2001:DB8:2::1]:8:myhost:ens10
+--
 
 **ifname=**__<interface>__:__<MAC>__::
     Assign network device name <interface> (i.e. "bootnet") to the NIC with
