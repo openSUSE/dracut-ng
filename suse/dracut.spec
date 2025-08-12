@@ -476,7 +476,6 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/99squash-lib
 %{dracutlibdir}/modules.d/99suse
 %{dracutlibdir}/modules.d/99suse-initrd
-%{dracutlibdir}/modules.d/99systemd-sysusers
 %{dracutlibdir}/modules.d/99uefi-lib
 %attr(0640,root,root) %ghost %config(missingok,noreplace) %{_localstatedir}/log/dracut.log
 %dir %{_unitdir}/initrd.target.wants
