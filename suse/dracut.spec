@@ -361,6 +361,7 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %{dracutlibdir}/modules.d/01systemd-resolved
 %{dracutlibdir}/modules.d/01systemd-sysctl
 %{dracutlibdir}/modules.d/01systemd-sysext
+%{dracutlibdir}/modules.d/01systemd-sysusers
 %{dracutlibdir}/modules.d/01systemd-timedated
 %{dracutlibdir}/modules.d/01systemd-timesyncd
 %{dracutlibdir}/modules.d/01systemd-tmpfiles
