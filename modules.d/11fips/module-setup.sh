@@ -18,6 +18,10 @@ installkernel() {
         _fipsmodules+="sha3-224 sha3-256 sha3-384 sha3-512 "
         _fipsmodules+="crc32c crct10dif ghash "
 
+        # Hashes, platform specific:
+        _fipsmodules+="sha512-ssse3 sha1-ssse3 sha256-ssse3 "
+        _fipsmodules+="ghash-clmulni-intel "
+
         # Ciphers:
         _fipsmodules+="cipher_null des3_ede aes cfb dh ecdh "
 
@@ -60,8 +64,11 @@ install() {
     inst_script "$moddir/fips.sh" /sbin/fips.sh
 
     inst_multiple rmmod insmod mount uname umount grep sed cut find sort cat tail tr
-
-    inst_multiple -o sha512hmac
+    inst_multiple -o sha512hmac \
+                     fipscheck \
+                     /usr/libexec/libkcapi/fipscheck \
+                     /usr/lib64/libkcapi/fipscheck \
+                     /usr/lib/libkcapi/fipscheck
 
     inst_simple /etc/system-fips
 
