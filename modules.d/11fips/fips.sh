@@ -2,6 +2,24 @@
 
 command -v getarg > /dev/null || . /lib/dracut-lib.sh
 
+# find fipscheck, prefer kernel-based version
+fipscheck() {
+    local FIPSCHECK
+
+    FIPSCHECK=/usr/libexec/libkcapi/fipscheck
+    if [ ! -f $FIPSCHECK ]; then
+        FIPSCHECK=/usr/lib64/libkcapi/fipscheck
+    fi
+    if [ ! -f $FIPSCHECK ]; then
+        FIPSCHECK=/usr/lib/libkcapi/fipscheck
+    fi
+    if [ ! -f $FIPSCHECK ]; then
+        FIPSCHECK=/usr/bin/fipscheck
+    fi
+
+    echo $FIPSCHECK
+}
+
 # systemd lets stdout go to journal only, but the system
 # has to halt when the integrity check fails to satisfy FIPS.
 if [ -z "${DRACUT_SYSTEMD-}" ]; then
@@ -136,6 +154,30 @@ nonfatal_modprobe() {
         done
 }
 
+get_vmname() {
+    local _vmname
+
+    case "$(uname -m)" in
+    s390|s390x)
+        _vmname=image
+        ;;
+    ppc*)
+        _vmname=vmlinux
+        ;;
+    aarch64)
+        _vmname=Image
+        ;;
+    armv*)
+        _vmname=zImage
+        ;;
+    *)
+        _vmname=vmlinuz
+        ;;
+    esac
+
+    echo "$_vmname"
+}
+
 fips_load_crypto() {
     local _k
     local _v
@@ -154,6 +196,25 @@ fips_load_crypto() {
                     _found=1
                     break
                 done < /proc/crypto
+                # If we find some hardware specific modules and cannot load them
+                # it is not a problem, proceed.
+                if [ "$_found" = "0" ]; then
+                    # shellcheck disable=SC2055
+                    if [    "$_module" != "${_module%intel}"    \
+                        -o  "$_module" != "${_module%ssse3}"    \
+                        -o  "$_module" != "${_module%x86_64}"   \
+                        -o  "$_module" != "${_module%z90}"      \
+                        -o  "$_module" != "${_module%s390}"     \
+                        -o  "$_module" == "twofish_x86_64_3way" \
+                        -o  "$_module" == "ablk_helper"         \
+                        -o  "$_module" == "glue_helper"         \
+                        -o  "$_module" == "sha1-mb"             \
+                        -o  "$_module" == "sha256-mb"           \
+                        -o  "$_module" == "sha512-mb"           \
+                    ]; then
+                        _found=1
+                    fi
+                fi
                 [ "$_found" = "0" ] && cat /tmp/fips.modprobe_err >&2 && return 1
             fi
         fi
@@ -208,15 +269,18 @@ do_fips() {
             BOOT_IMAGE_NAME="${BOOT_IMAGE##*/}"
             BOOT_IMAGE_PATH="${BOOT_IMAGE%"${BOOT_IMAGE_NAME}"}"
 
+            local _vmname
+            _vmname=$(get_vmname)
+
             if [ -z "$BOOT_IMAGE_NAME" ]; then
-                BOOT_IMAGE_NAME="vmlinuz-${KERNEL}"
-            elif ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE_NAME}" ]; then
+                BOOT_IMAGE_NAME="${_vmname}-${KERNEL}"
+            elif ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE}" ]; then
                 #if /boot is not a separate partition BOOT_IMAGE might start with /boot
                 BOOT_IMAGE_PATH=${BOOT_IMAGE_PATH#"/boot"}
                 #on some architectures BOOT_IMAGE does not contain path to kernel
                 #so if we can't find anything, let's treat it in the same way as if it was empty
                 if ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE_NAME}" ]; then
-                    BOOT_IMAGE_NAME="vmlinuz-${KERNEL}"
+                    BOOT_IMAGE_NAME="${_vmname}-${KERNEL}"
                     BOOT_IMAGE_PATH=""
                 fi
             fi
@@ -227,7 +291,18 @@ do_fips() {
                 return 1
             fi
 
-            (cd "${BOOT_IMAGE_HMAC%/*}" && sha512hmac -c "${BOOT_IMAGE_HMAC}") || return 1
+            BOOT_IMAGE_KERNEL="/boot/${BOOT_IMAGE_PATH}${BOOT_IMAGE_NAME}"
+            if ! [ -e "${BOOT_IMAGE_KERNEL}" ]; then
+                warn "${BOOT_IMAGE_KERNEL} does not exist"
+                return 1
+            fi
+
+            if [ -n "$(fipscheck)" ]; then
+                $(fipscheck) "${BOOT_IMAGE_KERNEL}" || return 1
+            else
+                warn "Could not find fipscheck to verify MACs"
+                return 1
+            fi
         fi
     fi
 
