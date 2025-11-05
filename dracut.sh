@@ -1084,6 +1084,7 @@ if [[ $regenerate_all == "yes" ]]; then
     if [[ $parallel != "yes" ]]; then
         for i in *; do
             [[ -f $i/modules.dep ]] || [[ -f $i/modules.dep.bin ]] || continue
+            [[ -d $i/kernel ]] || continue
             "$dracut_cmd" --kver="$i" "${dracut_args[@]}"
             _rc=$?
             if [[ $_rc -gt 0 ]]; then
@@ -1094,6 +1095,7 @@ if [[ $regenerate_all == "yes" ]]; then
     else
         for i in *; do
             [[ -f $i/modules.dep ]] || [[ -f $i/modules.dep.bin ]] || continue
+            [[ -d $i/kernel ]] || continue
             "$dracut_cmd" --kver="$i" "${dracut_args[@]}" &
         done
         while :; do
