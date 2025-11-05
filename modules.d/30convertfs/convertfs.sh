@@ -21,6 +21,24 @@ while [[ $ROOT != "${ROOT%/}" ]]; do
     ROOT=${ROOT%/}
 done
 
+#mount /sysroot rw
+[[ -w $ROOT ]] || mount -o remount,rw "$ROOT"
+
+#mount /sysroot/var if it is a separate mount
+VARDEV=$(sed -n -e 's/^\#.*//' -e '/ \/var /s/\([[:graph:]]* \).*/\1/p' "$ROOT"/etc/fstab)
+VARFS=$(sed -n -e 's/^\#.*//' -e '/ \/var /s/[[:graph:]]* * [[:graph:]]* *\([[:graph:]]* \).*/\1/p' "$ROOT"/etc/fstab)
+
+if [[ -n $VARDEV ]] && [[ -n $VARFS ]]; then
+    #mount btrfs subvolume var
+    if [[ $VARFS == btrfs ]]; then
+        SUBVOLIDVAR=$(btrfs subvolume list "$ROOT" | sed -n '/var$/s/ID \([[:digit:]]*\) .*/\1/p')
+        ROOTDEV=$(sed -n "/\\$ROOT/s/\([[:graph:]]*\) .*/\1/p" /proc/mounts)
+        [[  -z $SUBVOLIDVAR ]] || mount -o subvolid="$SUBVOLIDVAR" "$ROOTDEV" "$ROOT"/var
+    else
+        mount "$VARDEV" "$ROOT"/var
+    fi
+fi
+
 if [ ! -L "$ROOT"/var/run ] && [ -e "$ROOT"/var/run ]; then
     echo "Converting /var/run to symlink"
     mv -f "$ROOT"/var/run "$ROOT"/var/run.runmove~
@@ -32,6 +50,9 @@ if [ ! -L "$ROOT"/var/lock ] && [ -e "$ROOT"/var/lock ]; then
     mv -f "$ROOT"/var/lock "$ROOT"/var/lock.lockmove~
     ln -sfn ../run/lock "$ROOT"/var/lock
 fi
+
+[[ -n $SUBVOLIDVAR ]] && umount "$ROOT"/var
+[[ -w $ROOT ]] && mount -o remount,ro "$ROOT"
 
 needconvert() {
     for dir in "$ROOT/bin" "$ROOT/sbin" "$ROOT/lib" "$ROOT/lib64"; do
