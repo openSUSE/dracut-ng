@@ -12,7 +12,8 @@ pkglib_dir() {
 read_setting_from_config() {
     local setting="$1"
     local config_file="$2"
-    sed -n "s/^${setting}= *\([^ ]\+\) */\1/p" "$config_file"
+    [[ -f $config_file ]] \
+        && sed -n "s/^${setting}= *\([^ ]\+\) */\1/p" "$config_file"
 }
 
 use_simpledrm() {
