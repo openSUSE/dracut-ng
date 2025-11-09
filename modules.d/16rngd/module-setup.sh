@@ -21,7 +21,6 @@
 check() {
     # if there's no rngd binary, no go.
     require_binaries rngd || return 1
-    [[ -e "${systemdsystemunitdir}/rngd.service" ]] || return 1
 
     return 0
 }
@@ -33,11 +32,7 @@ depends() {
 
 install() {
     inst rngd
-    inst_simple "${systemdsystemunitdir}/rngd.service"
-
-    if [ -r /etc/sysconfig/rngd ]; then
-        inst_simple "${moddir}/sysconfig" "/etc/sysconfig/rngd"
-    fi
+    inst_simple "${moddir}/rngd.service" "${systemdsystemunitdir}/rngd.service"
 
     # make sure dependent libs are installed too
     inst_libdir_file opensc-pkcs11.so
