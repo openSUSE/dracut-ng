@@ -2,6 +2,19 @@
 
 # called by dracut
 check() {
+    resume_on_cmdline() {
+        local _cmdline _arg _value
+
+        read -ra _cmdline < /proc/cmdline
+        for _arg in "${_cmdline[@]}"; do
+            if [[ $_arg =~ resume=* ]]; then
+                echo "${_arg#resume=}"
+            fi
+        done
+
+        [[ $_value ]] && printf "%s" "$_value"
+    }
+
     swap_on_netdevice() {
         local _dev
         for _dev in "${swap_devs[@]}"; do
@@ -10,35 +23,36 @@ check() {
         return 1
     }
 
-    # If hostonly check if we want to include the resume module
-    if [[ $hostonly ]] || [[ $mount_needs ]]; then
-        # Resuming won't work if swap is on a netdevice
-        if swap_on_netdevice; then
-            ddebug "Module resume: swap is on a netdevice"
-            return 255
-        fi
-        if grep -rqsE '(^| )resume=' /proc/cmdline /etc/kernel/cmdline /usr/lib/kernel/cmdline; then
-            ddebug "Module resume: hibernation support requested on kernel command line"
-            return 0
-        # resume= not set on kernel command line
-        elif [[ -f /sys/power/resume ]]; then
-            if [[ $hostonly_mode != "strict" ]]; then
-                ddebug "Module resume: hibernation supported by the kernel"
-                return 0
-            elif [[ "$(< /sys/power/resume)" == "0:0" ]]; then
-                ddebug "Module resume: hibernation supported by the kernel, but not enabled"
+    # Only support resume if there is any suitable swap and
+    # it is not mounted on a net device
+    [[ $hostonly ]] || [[ $mount_needs ]] && {
+        # sanity check: do not add the resume module if there is a
+        # resume argument pointing to a non existent disk or to a
+        # volatile swap
+        local _resume
+        _resume=$(resume_on_cmdline)
+        if [ -n "$_resume" ]; then
+            _resume="$(label_uuid_to_dev "$_resume")"
+            if [ ! -e "$_resume" ]; then
+                derror "Current resume kernel argument points to an invalid disk"
                 return 255
-            else
-                ddebug "Module resume: hibernation supported by the kernel and enabled"
-                return 0
             fi
-        else
-            ddebug "Module resume: resume file doesn't exist, hibernation not supported by kernel"
-            return 255
+            if [[ $_resume == /dev/mapper/* ]]; then
+                if [[ -f "$dracutsysrootdir"/etc/crypttab ]]; then
+                    local _mapper _opts
+                    read -r _mapper _ _ _opts < <(grep -m1 -w "^${_resume#/dev/mapper/}" "$dracutsysrootdir"/etc/crypttab)
+                    if [[ -n $_mapper ]] && [[ $_opts == *swap* ]]; then
+                        derror "Current resume kernel argument points to a volatile swap"
+                        return 255
+                    fi
+                fi
+            fi
         fi
-    else
-        return 0
-    fi
+        ((${#swap_devs[@]})) || return 255
+        swap_on_netdevice && return 255
+    }
+
+    return 0
 }
 
 # called by dracut

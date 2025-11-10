@@ -1044,6 +1044,28 @@ get_dev_module() {
     echo "$dev_drivers"
 }
 
+label_uuid_to_dev() {
+    local _dev
+    _dev="${1#block:}"
+    case "$_dev" in
+        LABEL=*)
+            echo "/dev/disk/by-label/$(echo "${_dev#LABEL=}" | sed 's,/,\\x2f,g;s, ,\\x20,g')"
+            ;;
+        PARTLABEL=*)
+            echo "/dev/disk/by-partlabel/$(echo "${_dev#PARTLABEL=}" | sed 's,/,\\x2f,g;s, ,\\x20,g')"
+            ;;
+        UUID=*)
+            echo "/dev/disk/by-uuid/${_dev#UUID=}"
+            ;;
+        PARTUUID=*)
+            echo "/dev/disk/by-partuuid/${_dev#PARTUUID=}"
+            ;;
+        *)
+            echo "$_dev"
+            ;;
+    esac
+}
+
 # Check if file is in PE format
 pe_file_format() {
     if [[ $# -eq 1 ]]; then
