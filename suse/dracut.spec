@@ -39,13 +39,13 @@ BuildRequires:  cargo
 BuildRequires:  docbook-xsl-stylesheets
 BuildRequires:  libxslt
 BuildRequires:  pkgconfig(libkmod)
-BuildRequires:  pkgconfig(systemd) >= 219
+# dracut >= 108 needs to be compiled with libsystemd.pc present to enable
+# parsing .note.dlopen JSON entries from the libsystemd-shared-*.so library,
+# in order to resolve dlopen() dependencies.
+BuildRequires:  pkgconfig(libsystemd) >= 257
+BuildRequires:  pkgconfig(systemd) >= 257
 BuildRequires:  rubygem(asciidoctor)
 BuildRequires:  rust
-# dracut >= 108 needs to be compiled with libsystemd.pc present (provided by
-# systemd-devel) to enable parsing .note.dlopen JSON entries from the
-# libsystemd-shared-*.so library, in order to resolve dlopen() dependencies.
-BuildRequires:  systemd-devel
 Requires:       %{_bindir}/get_kernel_version
 Requires:       bash
 Requires:       coreutils
