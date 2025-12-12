@@ -2010,6 +2010,7 @@ if [[ $printconfig ]]; then
         fscks \
         fw_dir \
         hostonly_cmdline \
+        initrdname \
         kernel_only \
         kmsgloglvl \
         libdirs \
