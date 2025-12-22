@@ -1,7 +1,7 @@
 #
 # spec file for package dracut
 #
-# Copyright (c) 2025 SUSE LLC
+# Copyright (c) 2026 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -34,6 +34,7 @@ URL:            https://github.com/dracut-ng/dracut-ng
 Source0:        dracut-%{version}.tar.xz
 Source1:        dracut-rpmlintrc
 Source2:        README.susemaint
+Source3:        dracut-rpm-tmpfiles.conf
 BuildRequires:  bash
 BuildRequires:  cargo
 BuildRequires:  docbook-xsl-stylesheets
@@ -161,11 +162,6 @@ rm -rf %{buildroot}%{dracutlibdir}/modules.d/74znet
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/10warpclock
 %endif
 
-mkdir -p %{buildroot}/boot/dracut
-mkdir -p %{buildroot}%{_localstatedir}/lib/dracut/overlay
-mkdir -p %{buildroot}%{_localstatedir}/log
-touch %{buildroot}%{_localstatedir}/log/dracut.log
-
 rm -rf %{buildroot}%{dracutlibdir}/dracut.conf.d/*
 install -D -m 0644 dracut.conf.d/opensuse/01-dist.conf %{buildroot}%{dracutlibdir}/dracut.conf.d/01-dist.conf
 install -m 0644 suse/99-debug.conf %{buildroot}%{_sysconfdir}/dracut.conf.d/99-debug.conf
@@ -183,6 +179,10 @@ install -m 0644 suse/persistent_policy.conf %{buildroot}%{_sysconfdir}/dracut.co
 # remove tests
 rm -rf %{buildroot}%{dracutlibdir}/test
 rm -rf %{buildroot}%{dracutlibdir}/modules.d/70test*
+
+# switch to tmpfiles config (jsc#PED-14785)
+mkdir -p %{buildroot}%{_tmpfilesdir}
+install -m 644 %{SOURCE3} %{buildroot}%{_tmpfilesdir}/dracut.conf
 
 %post
 # check whether /var/run has been converted to a symlink
@@ -265,9 +265,7 @@ rm -f /var/adm/fillup-templates/sysconfig.kernel-mkinitrd
 %files tools
 %{_bindir}/dracut-catimages
 %{_mandir}/man8/dracut-catimages.8*
-%dir /boot/dracut
-%dir %{_localstatedir}/lib/dracut
-%dir %{_localstatedir}/lib/dracut/overlay
+%{_tmpfilesdir}/dracut.conf
 
 %files extra
 %license COPYING
