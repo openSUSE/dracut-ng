@@ -1126,7 +1126,6 @@ skip:
                         char* library = find_library(soname, fullsrcpath, src_len, match64, match32); \
                         if (!library || hashmap_put_strdup_key(deps, soname, library) < 0) { \
                                 log_error("ERROR: could not locate dependency %s requested by '%s'", soname, fullsrcpath); \
-                                ret = -1; \
                         } \
                 } \
         } \
