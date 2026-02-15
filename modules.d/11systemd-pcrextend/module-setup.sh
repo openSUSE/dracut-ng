@@ -37,7 +37,8 @@ install() {
         "$systemdutildir"/systemd-pcrextend \
         "$systemdsystemunitdir"/systemd-pcrphase-initrd.service \
         "$systemdsystemunitdir/systemd-pcrphase-initrd.service.d/*.conf" \
-        "$systemdsystemunitdir"/initrd.target.wants/systemd-pcrphase-initrd.service
+        "$systemdsystemunitdir"/initrd.target.wants/systemd-pcrphase-initrd.service \
+        "/usr/lib/nvpcr/*.nvpcr"
 
     # Install the hosts local user configurations if enabled.
     if [[ $hostonly ]]; then
