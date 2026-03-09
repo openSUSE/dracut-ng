@@ -1557,10 +1557,16 @@ inst_library() {
     inst "$@"
 }
 
-# empty function for compatibility
 # shellcheck disable=SC2317,SC2329
 inst_fsck_help() {
-    :
+    local _ret _helper="/var/lib/dracut/fsck/fsck_help_$1.txt"
+    if $DRACUT_INSTALL ${dracutsysrootdir:+-r "$dracutsysrootdir"} ${initdir:+-D "$initdir"} ${loginstall:+-L "$loginstall"} ${DRACUT_RESOLVE_DEPS:+-l} ${DRACUT_FIPS_MODE:+-f} "$2" "$_helper"; then
+        return 0
+    else
+        _ret=$?
+        derror "$DRACUT_INSTALL" ${dracutsysrootdir:+-r "$dracutsysrootdir"} ${initdir:+-D "$initdir"} ${loginstall:+-L "$loginstall"} ${DRACUT_RESOLVE_DEPS:+-l} ${DRACUT_FIPS_MODE:+-f} "$2" "$_helper"
+        return $_ret
+    fi
 }
 
 # shellcheck disable=SC2317,SC2329
