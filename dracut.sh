@@ -1192,7 +1192,7 @@ drivers_dir="${drivers_dir%"${drivers_dir##*[!/]}"}"
 TMPDIR="$(realpath -e "$tmpdir")"
 readonly TMPDIR
 [ -d "$TMPDIR" ] || {
-    dfatal "Invalid tmpdir '$tmpdir'."
+    printf "%s\n" "dracut[F]: Invalid tmpdir '$tmpdir'." >&2
     exit 1
 }
 
@@ -1204,7 +1204,7 @@ fi
 DRACUT_TMPDIR="$(mktemp -p "$TMPDIR/" -d -t dracut.dXXXXXX)"
 readonly DRACUT_TMPDIR
 [ -d "$DRACUT_TMPDIR" ] || {
-    dfatal "mktemp -p '$TMPDIR/' -d -t dracut.dXXXXXX failed."
+    printf "%s\n" "dracut[F]: mktemp -p '$TMPDIR/' -d -t dracut.dXXXXXX failed." >&2
     exit 1
 }
 
