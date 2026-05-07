@@ -68,17 +68,7 @@ install() {
     [[ $hostonly ]] && pwshadow='x'
     grep -qs '^root:' "$initdir/etc/passwd" || echo "root:$pwshadow:0:0::/root:/bin/sh" >> "$initdir/etc/passwd"
 
-    if [[ $hostonly ]]; then
-        # check if other dracut modules already created an entry for root in /etc/shadow
-        if grep -qs '^root:' "$initdir/etc/shadow"; then
-            grep -v '^root:' "$initdir/etc/shadow" > "$initdir/etc/shadow-"
-            mv "$initdir/etc/shadow-" "$initdir/etc/shadow"
-        fi
-        # replace root password in the existing entry in etc/shadow
-        # root password from host takes precedence over root password set by systemd-sysuser in hostonly mode
-        # create a new entry for root in /etc/shadow
-        grep '^root:' "${dracutsysrootdir-}"/etc/shadow >> "$initdir/etc/shadow"
-    fi
+    [[ $hostonly ]] && grep '^root:' "${dracutsysrootdir-}"/etc/shadow >> "$initdir/etc/shadow"
 
     # install our scripts and hooks
     inst_script "$moddir/loginit.sh" "/sbin/loginit"
