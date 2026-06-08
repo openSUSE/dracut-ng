@@ -1,6 +1,7 @@
 #!/bin/sh
 
 command -v getargbool > /dev/null || . /lib/dracut-lib.sh
+command -v is_hcn_enabled > /dev/null || . /lib/net-lib.sh
 
 [ -e /usr/lib/systemd/system/NetworkManager-initrd.service ] \
     && nm_service_name="NetworkManager-initrd" \
@@ -36,7 +37,13 @@ EOF
     fi
 fi
 
-if [ "$nm_service_name" = "nm-initrd" ]; then
+if is_hcn_enabled; then
+    if ! [ -e /run/NetworkManager/initrd/hcn-active ]; then
+        mkdir -p /run/NetworkManager/initrd
+        : > /run/NetworkManager/initrd/hcn-active
+        info "HCN is active"
+    fi
+elif [ "$nm_service_name" = "nm-initrd" ]; then
     command -v nm_generate_connections > /dev/null || . /lib/nm-lib.sh
     nm_generate_connections
 fi

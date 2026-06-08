@@ -906,3 +906,31 @@ iface_get_subchannels() {
 
     printf -- "%s" "${_subchannels%,}"
 }
+
+is_hcn_enabled() {
+    local _val
+
+    # check kernel command line
+    if _val=$(getarg rd.hcn); then
+        if [ -n "$_val" ]; then
+            # rd.hcn=0
+            [ "$_val" = "0" ] && return 1
+            # rd.hcn=1
+            [ "$_val" = "1" ] && return 0
+        else
+            # rd.hcn
+            return 0
+        fi
+    fi
+
+    # check device-tree
+    if [ -d /proc/device-tree ]; then
+        for dev in /proc/device-tree/pci*/ethernet* /proc/device-tree/vdevice/vnic* /proc/device-tree/vdevice/l-lan*; do
+            if [ -e "$dev/ibm,hcn-id" ]; then
+                return 0
+            fi
+        done
+    fi
+
+    return 1
+}
