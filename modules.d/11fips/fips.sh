@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
 command -v getarg > /dev/null || . /lib/dracut-lib.sh
+command -v get_vmname > /dev/null || . /lib/fips-lib.sh
 
 # find fipscheck, prefer kernel-based version
 fipscheck() {
@@ -97,6 +98,47 @@ mount_boot() {
     fi
 }
 
+mount_zipl() {
+    boot=$(getarg rd.zipl=)
+
+    if [ -d /boot/zipl ] && ismounted /boot/zipl; then
+        fips_info "Nothing to do, /boot/zipl is already mounted..."
+        return 0
+    fi
+    if [ -z "$boot" ]; then
+        die "You have to specify rd.zipl=<boot device> as a boot option for fips=1"
+    fi
+    case "$boot" in
+        LABEL=* | UUID=* | PARTUUID=* | PARTLABEL=*)
+            boot="$(label_uuid_to_dev "$boot")"
+            ;;
+        /dev/*) ;;
+
+        *)
+            die "You have to specify rd.zipl=<boot device> as a boot option for fips=1"
+            ;;
+    esac
+    if ! [ -e "$boot" ]; then
+        udevadm trigger --action=add > /dev/null 2>&1
+
+        i=0
+        while ! [ -e "$boot" ]; do
+            udevadm settle --exit-if-exists="$boot"
+            [ -e "$boot" ] && break
+            sleep 0.5
+            i=$((i + 1))
+            [ $i -gt 40 ] && break
+        done
+    fi
+
+    [ -e "$boot" ] || die "$boot: no such device"
+
+    mkdir -p /boot/zipl || die "Couldn't create mount point for /boot/zipl"
+    fips_info "Mounting $boot as /boot/zipl"
+    mount -oro "$boot" /boot/zipl || die "Couldn't mount $boot"
+    FIPS_MOUNTED_ZIPL=1
+}
+
 do_rhevh_check() {
     KERNEL=$(uname -r)
     kpath=${1}
@@ -154,30 +196,6 @@ nonfatal_modprobe() {
         done
 }
 
-get_vmname() {
-    local _vmname
-
-    case "$(uname -m)" in
-    s390|s390x)
-        _vmname=image
-        ;;
-    ppc*)
-        _vmname=vmlinux
-        ;;
-    aarch64)
-        _vmname=Image
-        ;;
-    armv*)
-        _vmname=zImage
-        ;;
-    *)
-        _vmname=vmlinuz
-        ;;
-    esac
-
-    echo "$_vmname"
-}
-
 fips_load_crypto() {
     local _k
     local _v
@@ -199,7 +217,7 @@ fips_load_crypto() {
                 # If we find some hardware specific modules and cannot load them
                 # it is not a problem, proceed.
                 if [ "$_found" = "0" ]; then
-                    # shellcheck disable=SC2055
+                    # shellcheck disable=SC2055 disable=SC2166
                     if [    "$_module" != "${_module%intel}"    \
                         -o  "$_module" != "${_module%ssse3}"    \
                         -o  "$_module" != "${_module%x86_64}"   \
@@ -231,6 +249,9 @@ fips_load_crypto() {
 
 do_fips() {
     KERNEL=$(uname -r)
+    #FIXME: "lib64" might be wrong, but (for now) it's vital only for s390x => good enough
+    # (and a symlink from "lib" exists)
+    FIPSCHECKDIR=/usr/lib64/fipscheck
 
     if ! getarg rd.fips.skipkernel > /dev/null; then
 
@@ -264,6 +285,7 @@ do_fips() {
             fi
 
             # Trim off any leading GRUB boot device (e.g. ($root) )
+            # shellcheck disable=SC2001
             BOOT_IMAGE="$(echo "${BOOT_IMAGE}" | sed 's/^(.*)//')"
 
             BOOT_IMAGE_NAME="${BOOT_IMAGE##*/}"
@@ -274,6 +296,11 @@ do_fips() {
 
             if [ -z "$BOOT_IMAGE_NAME" ]; then
                 BOOT_IMAGE_NAME="${_vmname}-${KERNEL}"
+                if getargbool 0 initgrub; then
+                    # only needed for zipl booted first stage
+                   mount_zipl
+                   BOOT_IMAGE_PATH=zipl/
+                fi
             elif ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE}" ]; then
                 #if /boot is not a separate partition BOOT_IMAGE might start with /boot
                 BOOT_IMAGE_PATH=${BOOT_IMAGE_PATH#"/boot"}
@@ -285,10 +312,15 @@ do_fips() {
                 fi
             fi
 
-            BOOT_IMAGE_HMAC="/boot/${BOOT_IMAGE_PATH}/.${BOOT_IMAGE_NAME}.hmac"
+            BOOT_IMAGE_HMAC="/boot/${BOOT_IMAGE_PATH}.${BOOT_IMAGE_NAME}.hmac"
             if ! [ -e "${BOOT_IMAGE_HMAC}" ]; then
-                warn "${BOOT_IMAGE_HMAC} does not exist"
-                return 1
+                FCDBIH="${FIPSCHECKDIR}/${_vmname}-${KERNEL}.hmac"
+                if [ -r "${FCDBIH}" ]; then
+                    BOOT_IMAGE_HMAC="${FCDBIH}"
+                else
+                    warn "${BOOT_IMAGE_HMAC} does not exist"
+                    return 1
+                fi
             fi
 
             BOOT_IMAGE_KERNEL="/boot/${BOOT_IMAGE_PATH}${BOOT_IMAGE_NAME}"
@@ -296,6 +328,12 @@ do_fips() {
                 warn "${BOOT_IMAGE_KERNEL} does not exist"
                 return 1
             fi
+
+            # kernel-based fipscheck doesn't respect it's man-page...
+            ln -s  "${BOOT_IMAGE_KERNEL}" "/${_vmname}-${KERNEL}"
+            ln -sf "${BOOT_IMAGE_HMAC}"   "/.${_vmname}-${KERNEL}.hmac"
+            # so base the checks on sym-links in /
+            BOOT_IMAGE_KERNEL="/${_vmname}-${KERNEL}"
 
             if [ -n "$(fipscheck)" ]; then
                 $(fipscheck) "${BOOT_IMAGE_KERNEL}" || return 1
@@ -315,6 +353,10 @@ do_fips() {
         umount /boot > /dev/null 2>&1
     else
         fips_info "Not unmounting /boot"
+    fi
+    if [ "$FIPS_MOUNTED_ZIPL" = 1 ]; then
+        fips_info "Unmounting /boot/zipl"
+        umount /boot/zipl > /dev/null 2>&1
     fi
 
     return 0
