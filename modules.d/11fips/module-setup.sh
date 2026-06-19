@@ -7,7 +7,7 @@ check() {
 
 # called by dracut
 installkernel() {
-    local _fipsmodules _mod _bootfstype
+    local _fipsmodules _mod _bootfstype _vmname _fipscheckdir
     if [[ -f "${srcmods}/modules.fips" ]]; then
         read -d '' -r _fipsmodules < "${srcmods}/modules.fips"
     else
@@ -54,6 +54,18 @@ installkernel() {
             dwarning "Can't determine fs type for /boot, FIPS check may fail."
         fi
     fi
+
+    # shellcheck source=fips-lib.sh
+    . "$moddir/fips-lib.sh"
+    _vmname=$(get_vmname)
+    if [[ -e "${srcmods}/.${_vmname}.hmac" ]]; then
+        _fipscheckdir="${initdir}/usr/lib64/fipscheck"
+        mkdir -p "${_fipscheckdir}"
+        cp -p "${srcmods}/.${_vmname}.hmac" "${_fipscheckdir}/${_vmname}-${kernel}.hmac"
+        ln_r /usr/lib64/fipscheck /usr/lib/fipscheck
+    else
+        dwarning "${srcmods}/.${_vmname}.hmac not found"
+    fi
 }
 
 # called by dracut
@@ -62,8 +74,9 @@ install() {
     inst_hook pre-pivot 01 "$moddir/fips-noboot.sh"
     inst_hook pre-udev 01 "$moddir/fips-load-crypto.sh"
     inst_script "$moddir/fips.sh" /sbin/fips.sh
+    inst_simple "$moddir/fips-lib.sh" "/lib/fips-lib.sh"
 
-    inst_multiple rmmod insmod mount uname umount grep sed cut find sort cat tail tr
+    inst_multiple rmmod insmod mount uname umount grep sed ln cut find sort cat tail tr
     inst_multiple -o sha512hmac \
                      fipscheck \
                      /usr/libexec/libkcapi/fipscheck \
