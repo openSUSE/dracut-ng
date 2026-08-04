@@ -119,11 +119,8 @@ These modules would require including a version of systemd into initramfs.
 | systemd-sysext
 | https://www.freedesktop.org/software/systemd/man/systemd-sysext.html[systemd-sysext]
 
-| systemd-sysusers initrd build-time
+| systemd-sysusers
 | https://www.freedesktop.org/software/systemd/man/systemd-sysusers.html[systemd-sysusers]
-
-| systemd-sysusers-service initrd boot-time
-| https://www.freedesktop.org/software/systemd/man/latest/systemd-sysusers.html[systemd-sysusers-service]
 
 | systemd-timedated
 | https://www.freedesktop.org/software/systemd/man/systemd-timedated.html[systemd-timedated]
