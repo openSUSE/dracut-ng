@@ -7,7 +7,7 @@ check() {
 
         read -ra _cmdline < /proc/cmdline
         for _arg in "${_cmdline[@]}"; do
-            if [[ $_arg == resume=* ]]; then
+            if [[ $_arg == resume=* ]] || [[ $_arg == "noresume" ]]; then
                 _value="${_arg#resume=}"
             fi
         done
@@ -32,6 +32,7 @@ check() {
         local _resume
         _resume=$(resume_on_cmdline)
         if [ -n "$_resume" ]; then
+            [[ $_resume == "noresume" ]] && return 255
             _resume="$(label_uuid_to_dev "$_resume")"
             if [ ! -e "$_resume" ]; then
                 derror "Current resume kernel argument points to an invalid disk"
