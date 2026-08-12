@@ -7,8 +7,8 @@ check() {
 
         read -ra _cmdline < /proc/cmdline
         for _arg in "${_cmdline[@]}"; do
-            if [[ $_arg =~ resume=* ]]; then
-                echo "${_arg#resume=}"
+            if [[ $_arg == resume=* ]]; then
+                _value="${_arg#resume=}"
             fi
         done
 
