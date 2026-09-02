@@ -3127,8 +3127,6 @@ if [[ -e $outfile ]]; then
     outfile="${outfile}.tmp"
 fi
 
-dinfo "*** Creating image file '$outfile' ***"
-
 if [[ $uefi == yes ]]; then
     readonly uefi_outdir="$DRACUT_TMPDIR/uefi"
     mkdir -p "$uefi_outdir"
@@ -3161,6 +3159,8 @@ if [[ $do_hardlink == yes ]] && command -v hardlink > /dev/null; then
         clamp_mtimes "$initdir" -type d
     fi
 fi
+
+dinfo "*** Creating image file '$outfile' ***"
 
 [[ $EUID != 0 ]] && cpio_owner="0:0"
 
