@@ -301,7 +301,7 @@ do_fips() {
                    mount_zipl
                    BOOT_IMAGE_PATH=zipl/
                 fi
-            elif ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE}" ]; then
+            elif ! [ -e "/boot/${BOOT_IMAGE_PATH}/${BOOT_IMAGE_NAME}" ]; then
                 #if /boot is not a separate partition BOOT_IMAGE might start with /boot
                 BOOT_IMAGE_PATH=${BOOT_IMAGE_PATH#"/boot"}
                 #on some architectures BOOT_IMAGE does not contain path to kernel
